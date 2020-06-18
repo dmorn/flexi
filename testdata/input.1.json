@@ -1,0 +1,12 @@
+{
+    "capabilities": {
+        "cpu": 2,
+        "gpu": 0,
+        "ram": 4
+    },
+    "id": "example.1",
+    "image": {
+        "name": "to be defined",
+        "type": "docker"
+    }
+}
