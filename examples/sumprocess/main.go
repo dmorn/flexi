@@ -8,7 +8,7 @@ import (
 	"os/signal"
 
 	"github.com/jecoz/flexi"
-	"github.com/jecoz/flexi/ninep"
+	"github.com/jecoz/flexi/styx"
 )
 
 type Params struct {
@@ -82,7 +82,7 @@ func (po *Processor) Err(err error) {
 }
 
 func main() {
-	srv := &ninep.Srv{Port: "9pfs"}
+	srv := &styx.Srv{Port: "9pfs"}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
