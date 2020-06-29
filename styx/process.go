@@ -2,8 +2,12 @@ package styx
 
 import (
 	"io"
+	"log"
+	"net"
+	"os"
 
 	"aqwari.net/net/styx"
+	"github.com/jecoz/flexi"
 )
 
 type Process struct {
@@ -11,9 +15,11 @@ type Process struct {
 	status *File
 	retv   *File
 	err    *File
+	ln     net.Listener
+	port   string
 }
 
-func NewProcess() (*Process, error) {
+func NewProcess() *Process {
 	ctl := NewFile("ctl", 0222)
 	status := NewFile("status", 0444)
 	retv := NewFile("retv", 0444)
@@ -24,10 +30,10 @@ func NewProcess() (*Process, error) {
 		status: status,
 		retv:   retv,
 		err:    err,
-	}, nil
+	}
 }
 
-func (p *Process) Dir() (*Dir, error) {
+func (p *Process) Dir() *Dir {
 	return NewDir(0555, p.ctl, p.status, p.retv, p.err)
 }
 
@@ -48,11 +54,7 @@ func (p *Process) Err() io.Writer {
 }
 
 func (p *Process) serveReq(t styx.Request) error {
-	dir, err := p.Dir()
-	if err != nil {
-		return err
-	}
-	info, err := dir.Stat(t.Path())
+	info, err := p.Dir().Stat(t.Path())
 	if err != nil {
 		return err
 	}
@@ -76,4 +78,33 @@ func (p *Process) Serve9P(s *styx.Session) {
 			t.Rerror(err.Error())
 		}
 	}
+}
+
+var logrequests styx.HandlerFunc = func(s *styx.Session) {
+	for s.Next() {
+		log.Printf("%q %T %s", s.User, s.Request(), s.Request().Path())
+	}
+}
+
+func (p *Process) Serve(port string, r flexi.Processor) error {
+	addr := net.JoinHostPort("", port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	p.ln = ln
+
+	go r(p)
+
+	srv := &styx.Server{
+		Addr:     addr,
+		Handler:  styx.Stack(logrequests, p),
+		ErrorLog: log.New(os.Stderr, "", 0),
+		TraceLog: log.New(os.Stderr, "", 0),
+	}
+	return srv.Serve(ln)
+}
+
+func (p *Process) Close() error {
+	return p.ln.Close()
 }

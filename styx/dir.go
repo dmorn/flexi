@@ -11,25 +11,17 @@ type Dir struct {
 	name   string
 	perm   os.FileMode
 	t      time.Time
-	files  []os.FileInfo
 	offset int
+	files  []os.FileInfo
 }
 
-func NewDir(perm os.FileMode, files ...*File) (*Dir, error) {
-	fi := make([]os.FileInfo, len(files))
-	for i, v := range files {
-		if err := v.IsValid(); err != nil {
-			return nil, err
-		}
-		fi[i] = v
-	}
-
+func NewDir(perm os.FileMode, fis ...os.FileInfo) *Dir {
 	return &Dir{
 		name:  "/",
 		perm:  perm,
 		t:     time.Now(),
-		files: fi,
-	}, nil
+		files: fis,
+	}
 }
 
 func (d *Dir) Stat(p string) (os.FileInfo, error) {
