@@ -4,37 +4,35 @@ import (
 	"io"
 	"log"
 	"net"
-	"os"
 
 	"aqwari.net/net/styx"
 	"github.com/jecoz/flexi"
 )
 
 type Process struct {
-	ctl    *File
-	status *File
-	retv   *File
-	err    *File
+	ctl    *MemFile
+	status *MemFile
+	retv   *MemFile
+	err    *MemFile
+	fs     *Fs
 	ln     net.Listener
 	port   string
 }
 
 func NewProcess() *Process {
-	ctl := NewFile("ctl", 0222)
-	status := NewFile("status", 0444)
-	retv := NewFile("retv", 0444)
-	err := NewFile("err", 0444)
+	ctl := NewMemFile("ctl", 0222)
+	status := NewMemFile("status", 0444)
+	retv := NewMemFile("retv", 0444)
+	err := NewMemFile("err", 0444)
+	dir := NewDir("", 0555, ctl, status, retv, err)
 
 	return &Process{
 		ctl:    ctl,
 		status: status,
 		retv:   retv,
 		err:    err,
+		fs:     &Fs{Root: dir},
 	}
-}
-
-func (p *Process) Dir() *Dir {
-	return NewDir(0555, p.ctl, p.status, p.retv, p.err)
 }
 
 func (p *Process) Ctl() io.Reader {
@@ -53,30 +51,21 @@ func (p *Process) Err() io.Writer {
 	return p.err
 }
 
-func (p *Process) serveReq(t styx.Request) error {
-	info, err := p.Dir().Stat(t.Path())
-	if err != nil {
-		return err
-	}
-
+func (p *Process) serveReq(t styx.Request) {
 	switch msg := t.(type) {
 	case styx.Topen:
-		msg.Ropen(info.Sys(), nil)
+		msg.Ropen(p.fs.open(msg.Path()))
 	case styx.Twalk:
-		msg.Rwalk(info, nil)
+		msg.Rwalk(p.fs.Stat(msg.Path()))
 	case styx.Tstat:
-		msg.Rstat(info, nil)
+		msg.Rstat(p.fs.Stat(msg.Path()))
 	default:
 	}
-	return nil
 }
 
 func (p *Process) Serve9P(s *styx.Session) {
 	for s.Next() {
-		t := s.Request()
-		if err := p.serveReq(t); err != nil {
-			t.Rerror(err.Error())
-		}
+		p.serveReq(s.Request())
 	}
 }
 
@@ -97,10 +86,8 @@ func (p *Process) Serve(port string, r flexi.Processor) error {
 	go r(p)
 
 	srv := &styx.Server{
-		Addr:     addr,
-		Handler:  styx.Stack(logrequests, p),
-		ErrorLog: log.New(os.Stderr, "", 0),
-		TraceLog: log.New(os.Stderr, "", 0),
+		Addr:    addr,
+		Handler: styx.Stack(logrequests, p),
 	}
 	return srv.Serve(ln)
 }
