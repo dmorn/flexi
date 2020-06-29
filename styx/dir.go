@@ -1,7 +1,6 @@
 package styx
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
