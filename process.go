@@ -1,8 +1,6 @@
 package flexi
 
-import (
-	"io"
-)
+import "io"
 
 type Process interface {
 	Ctl() io.Reader
