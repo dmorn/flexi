@@ -63,13 +63,6 @@ func (po *Processor) run(p flexi.Process) error {
 	return po.Retv(sum)
 }
 
-func (po *Processor) Run(p flexi.Process) {
-	po.p = p
-	if err := po.run(p); err != nil {
-		po.Err(err)
-	}
-}
-
 func (po *Processor) Err(err error) {
 	log.Printf("processor error * %v", err)
 	if err := json.NewEncoder(po.p.Err()).Encode(struct {
@@ -81,18 +74,26 @@ func (po *Processor) Err(err error) {
 	}
 }
 
+func (po *Processor) Run(p flexi.Process) {
+	po.p = p
+	if err := po.run(p); err != nil {
+		po.Err(err)
+	}
+}
+
 func main() {
-	srv := &styx.Srv{Port: "9pfs"}
+	p := styx.NewProcess()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 	go func() {
 		s := <-sig
 		log.Printf("%v <- signal received\n", s)
-		srv.Close()
+		p.Close()
 	}()
 
-	if err := srv.Run(new(Processor).Run); err != nil {
+	r := new(Processor).Run
+	if err := p.Serve("9pfs", r); err != nil {
 		log.Printf("server error * %v", err)
 	}
 }
