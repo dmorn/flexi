@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"fmt"
 
 	"aqwari.net/net/styx"
 	"github.com/jecoz/flexi"
@@ -21,18 +22,28 @@ type Process struct {
 }
 
 func NewProcess() *Process {
-	ctl := NewMemFile("ctl", 0222)
-	status := NewMemFile("status", 0444)
-	retv := NewMemFile("retv", 0444)
-	err := NewMemFile("err", 0444)
-	dir := NewDir("", 0555, ctl, status, retv, err)
+	ctl := NewMemFile("/ctl", 0222)
+	status := NewMemFile("/status", 0444)
+	retv := NewMemFile("/retv", 0444)
+	err := NewMemFile("/err", 0444)
+	dir := NewDir("/", 0555, ctl, status, retv, err)
+
+	fs := NewFs()
+	for _, v := range []*MemFile{ctl, status, retv, err} {
+		if err := fs.Add(v.path, v); err != nil {
+			panic(fmt.Sprintf("new process: %v: %v", v.path, err))
+		}
+	}
+	if err := fs.Add(dir.path, dir); err != nil {
+		panic(err)
+	}
 
 	return &Process{
 		ctl:    ctl,
 		status: status,
 		retv:   retv,
 		err:    err,
-		fs:     &Fs{Root: dir},
+		fs:     fs,
 	}
 }
 
@@ -45,7 +56,7 @@ func (p *Process) Serve9P(s *styx.Session) {
 	for s.Next() {
 		switch msg := s.Request().(type) {
 		case styx.Topen:
-			msg.Ropen(p.fs.open(msg.Path()))
+			msg.Ropen(p.fs.Open(msg.Path()))
 		case styx.Twalk:
 			msg.Rwalk(p.fs.Stat(msg.Path()))
 		case styx.Tstat:

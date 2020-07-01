@@ -1,14 +1,10 @@
 package styx
 
 import (
-	"bytes"
-	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
-	"sync"
 	"time"
+	"path/filepath"
 )
 
 type File interface {
@@ -24,99 +20,53 @@ type File interface {
 	Sys() interface{}
 }
 
-func filename(f File) string {
-	info, err := f.Stat()
-	if err != nil {
-		return ""
-	}
-	return info.Name()
-}
-
-func find(path []string, n File) File {
-	if len(path) == 0 {
-		return nil
-	}
-	name := path[len(path)-1]
-
-	switch {
-	case name != filename(n):
-		return nil
-	case len(path) == 1:
-		return n
-	case !n.IsDir():
-		return nil
-	default:
-		// The name match and the node is
-		// supposed to be a directory. Find
-		// its children and search there!
-		dir, ok := n.(*Dir)
-		if !ok {
-			return nil
-		}
-		ch := make(chan File)
-		for _, v := range dir.Files {
-			go func(n File) {
-				ch <- find(path[1:], n)
-			}(v)
-		}
-		results := make([]File, len(dir.Files))
-		for i := range results {
-			results[i] = <-ch
-		}
-		for _, v := range results {
-			if v != nil {
-				return v
-			}
-		}
-		return nil
-	}
-}
-
-// Fs allows to build arbitrary file system hierarchies.
 type Fs struct {
-	Root File
+	table map[string]File
 }
 
-func (fs *Fs) Find(path string) (File, error) {
-	path = filepath.Clean(path)
-	if path == string(filepath.Separator) {
-		path = ""
-	}
+func NewFs() *Fs { return &Fs{ table: make(map[string]File) } }
 
-	fields := strings.Split(path, string(filepath.Separator))
-	file := find(fields, fs.Root)
-	if file == nil {
+func (fs *Fs) Add(path string, f File) error {
+	if _, ok := fs.table[path]; ok {
+		return os.ErrExist
+	}
+	fs.table[path] = f
+	return nil
+}
+
+func (fs *Fs) Lookup(path string) (File, error) {
+	f, ok := fs.table[path]
+	if !ok {
 		return nil, os.ErrNotExist
 	}
-
-	return file, nil
+	return f, nil
 }
 
 func (fs *Fs) Stat(path string) (os.FileInfo, error) {
-	f, err := fs.Find(path)
+	f, err := fs.Lookup(path)
 	if err != nil {
 		return nil, err
 	}
 	return f.Stat()
 }
 
-func (fs *Fs) open(path string) (interface{}, error) {
-	file, err := fs.Find(path)
+func (fs *Fs) Open(path string) (interface{}, error) {
+	f, err := fs.Lookup(path)
 	if err != nil {
 		return nil, err
 	}
-	return file.Sys(), nil
+	return f.Sys(), nil
 }
 
 type Dir struct {
-	Name  string
+	path  string
 	Files []File
 	Perm  os.FileMode
 }
 
-func NewDir(name string, perm os.FileMode, files ...File) *Dir {
+func NewDir(path string, perm os.FileMode, files ...File) *Dir {
 	return &Dir{
-		Name:  name,
+		path:  path,
 		Files: files,
 		Perm:  perm,
 	}
@@ -140,7 +90,7 @@ type DirInfo struct {
 }
 
 func (d *DirInfo) Name() string {
-	return d.dir.Name
+	return filepath.Dir(d.dir.path)
 }
 
 func (d *DirInfo) Size() int64 {
@@ -195,29 +145,25 @@ func (d *DirReader) Readdir(n int) ([]os.FileInfo, error) {
 	return fis, nil
 }
 
-type Buffer struct {
-	io.Reader
-	io.Writer
+type MemFile struct {
+	perm os.FileMode
+	path string
+	err  error
+
+	r *io.PipeReader
+	w *io.PipeWriter
 }
 
-func NewMemFile(name string, perm os.FileMode) *MemFile {
+func NewMemFile(path string, perm os.FileMode) *MemFile {
+	r, w := io.Pipe()
 	return &MemFile{
 		perm: perm,
-		name: name,
-		buf:  new(bytes.Buffer),
-		t:    time.Now(),
+		path: path,
+		r: r,
+		w: w,
 	}
 }
 
-type MemFile struct {
-	perm os.FileMode
-	name string
-	err  error
-
-	sync.Mutex
-	t   time.Time
-	buf *bytes.Buffer
-}
 
 func (f *MemFile) Stat() (os.FileInfo, error) {
 	if f.err != nil {
@@ -227,54 +173,32 @@ func (f *MemFile) Stat() (os.FileInfo, error) {
 }
 
 func (f *MemFile) ModTime() time.Time {
-	f.Lock()
-	defer f.Unlock()
-	return f.t
+	return time.Now()
 }
 
 func (f *MemFile) Mode() os.FileMode {
 	return f.perm
 }
 
-func (f *MemFile) Name() string {
-	return f.name
+func (f *MemFile) Name() (name string) {
+	_, name = filepath.Split(f.path)
+	return
 }
 
 func (f *MemFile) Size() int64 {
-	f.Lock()
-	defer f.Unlock()
-	return int64(f.buf.Len())
+	return 0
 }
 
 func (f *MemFile) Sys() interface{} {
-	f.Lock()
-	defer f.Unlock()
-
-	var b bytes.Buffer
-	if _, err := io.Copy(&b, f.buf); err != nil {
-		f.err = fmt.Errorf("copy into file buffer: %w", err)
-		return nil
-	}
-
-	return &Buffer{
-		Reader: &b,
-		Writer: f,
-	}
+	return f
 }
 
 func (f *MemFile) Write(p []byte) (int, error) {
-	f.Lock()
-	f.t = time.Now()
-	defer f.Unlock()
-
-	return f.buf.Write(p)
+	return f.w.Write(p)
 }
 
 func (f *MemFile) Read(p []byte) (int, error) {
-	f.Lock()
-	defer f.Unlock()
-
-	return f.buf.Read(p)
+	return f.r.Read(p)
 }
 
 func (f *MemFile) IsDir() bool {
