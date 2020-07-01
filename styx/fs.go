@@ -13,7 +13,7 @@ import (
 
 type File interface {
 	// Returns true if file is a directory. Usually when it is
-	// Sys() returns a *Dir instance.
+	// Sys() returns a *DirReader instance.
 	IsDir() bool
 	// Stat returns file information.
 	Stat() (os.FileInfo, error)
