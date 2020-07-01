@@ -4,6 +4,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 
 	"aqwari.net/net/styx"
 	"github.com/jecoz/flexi"
@@ -35,43 +36,22 @@ func NewProcess() *Process {
 	}
 }
 
-func (p *Process) Ctl() io.Reader {
-	return p.ctl
-}
-
-func (p *Process) Status() io.Writer {
-	return p.status
-}
-
-func (p *Process) Retv() io.Writer {
-	return p.retv
-}
-
-func (p *Process) Err() io.Writer {
-	return p.err
-}
-
-func (p *Process) serveReq(t styx.Request) {
-	switch msg := t.(type) {
-	case styx.Topen:
-		msg.Ropen(p.fs.open(msg.Path()))
-	case styx.Twalk:
-		msg.Rwalk(p.fs.Stat(msg.Path()))
-	case styx.Tstat:
-		msg.Rstat(p.fs.Stat(msg.Path()))
-	default:
-	}
-}
+func (p *Process) Ctl() io.Reader    { return p.ctl }
+func (p *Process) Status() io.Writer { return p.status }
+func (p *Process) Retv() io.Writer   { return p.retv }
+func (p *Process) Err() io.Writer    { return p.err }
 
 func (p *Process) Serve9P(s *styx.Session) {
 	for s.Next() {
-		p.serveReq(s.Request())
-	}
-}
-
-var logrequests styx.HandlerFunc = func(s *styx.Session) {
-	for s.Next() {
-		log.Printf("%q %T %s", s.User, s.Request(), s.Request().Path())
+		switch msg := s.Request().(type) {
+		case styx.Topen:
+			msg.Ropen(p.fs.open(msg.Path()))
+		case styx.Twalk:
+			msg.Rwalk(p.fs.Stat(msg.Path()))
+		case styx.Tstat:
+			msg.Rstat(p.fs.Stat(msg.Path()))
+		default:
+		}
 	}
 }
 
@@ -85,9 +65,16 @@ func (p *Process) Serve(port string, r flexi.Processor) error {
 
 	go r(p)
 
+	echo := styx.HandlerFunc(func(s *styx.Session) {
+		for s.Next() {
+			log.Printf("%q %T %s", s.User, s.Request(), s.Request().Path())
+		}
+	})
+
 	srv := &styx.Server{
-		Addr:    addr,
-		Handler: styx.Stack(logrequests, p),
+		Addr:     addr,
+		Handler:  styx.Stack(echo, p),
+		ErrorLog: log.New(os.Stderr, "", log.LstdFlags),
 	}
 	return srv.Serve(ln)
 }
