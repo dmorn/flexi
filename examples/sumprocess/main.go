@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -16,35 +17,22 @@ type Params struct {
 	To   int `json:"to"`
 }
 
+type Status struct {
+	Desc string `json:"desc"`
+}
+
+type Retv struct {
+	Sum int `json:"sum"`
+}
+
 type Processor struct {
 	p flexi.Process
 }
 
-func (po *Processor) Params() (p Params, err error) {
-	err = json.NewDecoder(po.p.Ctl()).Decode(&p)
-	return
-}
-
-func (po *Processor) Status(sum int) error {
-	return json.NewEncoder(po.p.Status()).Encode(struct {
-		D string `json:"description"`
-	}{
-		D: fmt.Sprintf("tmp sum: %d", sum),
-	})
-}
-
-func (po *Processor) Retv(sum int) error {
-	return json.NewEncoder(po.p.Retv()).Encode(struct {
-		Sum int `json:"sum"`
-	}{
-		Sum: sum,
-	})
-}
-
 func (po *Processor) run(p flexi.Process) error {
-	params, err := po.Params()
-	if err != nil {
-		return err
+	var params Params
+	if err := json.NewDecoder(po.p.Ctl()).Decode(&params); err != nil {
+		return fmt.Errorf("unable to decode params: %w", err)
 	}
 
 	log.Printf("summing from %d to %d\n", params.From, params.To)
@@ -54,34 +42,38 @@ func (po *Processor) run(p flexi.Process) error {
 	}
 
 	sum := 0
+	senc := json.NewEncoder(po.p.Status())
 	for i := params.From; i <= params.To; i++ {
 		sum += i
-		if err := po.Status(sum); err != nil {
+		if err := senc.Encode(&Status{
+			Desc: fmt.Sprintf("tmp sum: %d", sum),
+		}); err != nil {
 			return err
 		}
 	}
-	return po.Retv(sum)
-}
-
-func (po *Processor) Err(err error) {
-	log.Printf("processor error * %v", err)
-	if err := json.NewEncoder(po.p.Err()).Encode(struct {
-		Err string `json:"error"`
-	}{
-		Err: err.Error(),
-	}); err != nil {
-		log.Printf("error sending processor error * %v", err)
-	}
+	return json.NewEncoder(po.p.Retv()).Encode(&Retv{
+		Sum: sum,
+	})
 }
 
 func (po *Processor) Run(p flexi.Process) {
 	po.p = p
 	if err := po.run(p); err != nil {
-		po.Err(err)
+		log.Printf("processor error * %v", err)
+		if err := json.NewEncoder(po.p.Err()).Encode(struct {
+			Err string `json:"error"`
+		}{
+			Err: err.Error(),
+		}); err != nil {
+			log.Printf("error sending processor error * %v", err)
+		}
 	}
 }
 
 func main() {
+	port := flag.String("port", "9pfs", "Server listening port")
+	flag.Parse()
+
 	p := styx.NewProcess()
 
 	sig := make(chan os.Signal, 1)
@@ -92,8 +84,8 @@ func main() {
 		p.Close()
 	}()
 
-	r := new(Processor).Run
-	if err := p.Serve("9pfs", r); err != nil {
+	log.Printf("9p server listening on: %v", *port)
+	if err := p.Serve(*port, new(Processor).Run); err != nil {
 		log.Printf("server error * %v", err)
 	}
 }
