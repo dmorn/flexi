@@ -84,7 +84,6 @@ func main() {
 		p.Close()
 	}()
 
-	log.Printf("9p server listening on: %v", *port)
 	if err := p.Serve(*port, new(Processor).Run); err != nil {
 		log.Printf("server error * %v", err)
 	}
