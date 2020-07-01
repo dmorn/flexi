@@ -1,11 +1,11 @@
 package styx
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
-	"fmt"
 
 	"aqwari.net/net/styx"
 	"github.com/jecoz/flexi"

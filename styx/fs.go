@@ -3,8 +3,8 @@ package styx
 import (
 	"io"
 	"os"
-	"time"
 	"path/filepath"
+	"time"
 )
 
 type File interface {
@@ -24,7 +24,7 @@ type Fs struct {
 	table map[string]File
 }
 
-func NewFs() *Fs { return &Fs{ table: make(map[string]File) } }
+func NewFs() *Fs { return &Fs{table: make(map[string]File)} }
 
 func (fs *Fs) Add(path string, f File) error {
 	if _, ok := fs.table[path]; ok {
@@ -159,11 +159,10 @@ func NewMemFile(path string, perm os.FileMode) *MemFile {
 	return &MemFile{
 		perm: perm,
 		path: path,
-		r: r,
-		w: w,
+		r:    r,
+		w:    w,
 	}
 }
-
 
 func (f *MemFile) Stat() (os.FileInfo, error) {
 	if f.err != nil {
