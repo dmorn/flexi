@@ -1,7 +1,6 @@
 package styx
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -12,30 +11,21 @@ import (
 )
 
 type Process struct {
-	ctl    *MemFile
-	status *MemFile
-	retv   *MemFile
-	err    *MemFile
-	fs     *Fs
-	ln     net.Listener
-	port   string
+	ctl, status, retv, err *VolFile
+	root                   *Dir
+	ln                     net.Listener
+	port                   string
 }
 
 func NewProcess() *Process {
-	ctl := NewMemFile("/ctl", 0222)
-	status := NewMemFile("/status", 0444)
-	retv := NewMemFile("/retv", 0444)
-	err := NewMemFile("/err", 0444)
-	dir := NewDir("/", 0555, ctl, status, retv, err)
-
-	fs := NewFs()
-	for _, v := range []*MemFile{ctl, status, retv, err} {
-		if err := fs.Add(v.path, v); err != nil {
-			panic(fmt.Sprintf("new process: %v: %v", v.path, err))
-		}
-	}
-	if err := fs.Add(dir.path, dir); err != nil {
-		panic(err)
+	ctl := &VolFile{Name: "ctl", Perm: 0222}
+	status := &VolFile{Name: "status", Perm: 0444}
+	retv := &VolFile{Name: "retv", Perm: 0444}
+	err := &VolFile{Name: "err", Perm: 0444}
+	root := &Dir{
+		Perm:  0555,
+		Name:  "/",
+		Files: []File{ctl, status, retv, err},
 	}
 
 	return &Process{
@@ -43,7 +33,7 @@ func NewProcess() *Process {
 		status: status,
 		retv:   retv,
 		err:    err,
-		fs:     fs,
+		root:   root,
 	}
 }
 
@@ -52,15 +42,48 @@ func (p *Process) Status() io.Writer { return p.status }
 func (p *Process) Retv() io.Writer   { return p.retv }
 func (p *Process) Err() io.Writer    { return p.err }
 
+func (p *Process) lookup(path string) (File, error) {
+	switch path {
+	case "/":
+		return p.root, nil
+	case "/ctl":
+		return p.ctl, nil
+	case "/status":
+		return p.status, nil
+	case "/retv":
+		return p.retv, nil
+	case "/err":
+		return p.err, nil
+	default:
+		return nil, os.ErrNotExist
+	}
+}
+
+func (p *Process) open(path string) (interface{}, error) {
+	file, err := p.lookup(path)
+	if err != nil {
+		return nil, err
+	}
+	return file.Sys(), nil
+}
+
+func (p *Process) stat(path string) (os.FileInfo, error) {
+	file, err := p.lookup(path)
+	if err != nil {
+		return nil, err
+	}
+	return file.Stat()
+}
+
 func (p *Process) Serve9P(s *styx.Session) {
 	for s.Next() {
 		switch msg := s.Request().(type) {
 		case styx.Topen:
-			msg.Ropen(p.fs.Open(msg.Path()))
+			msg.Ropen(p.open(msg.Path()))
 		case styx.Twalk:
-			msg.Rwalk(p.fs.Stat(msg.Path()))
+			msg.Rwalk(p.stat(msg.Path()))
 		case styx.Tstat:
-			msg.Rstat(p.fs.Stat(msg.Path()))
+			msg.Rstat(p.stat(msg.Path()))
 		default:
 		}
 	}
