@@ -1,14 +1,14 @@
 package styx
 
 import (
+	"bytes"
+	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
-	"time"
 	"path/filepath"
-	"io"
-	"bytes"
-	"fmt"
+	"time"
 
 	"aqwari.net/net/styx"
 	"github.com/jecoz/flexi"
@@ -17,7 +17,7 @@ import (
 func (p *Process) openPanic(name string) io.WriteCloser {
 	file, err := p.rootfs.Lookup(name)
 	if err != nil {
-		panic("open buffer: "+err.Error())
+		panic("open buffer: " + err.Error())
 	}
 	wc, ok := file.(io.WriteCloser)
 	if !ok {
@@ -26,7 +26,7 @@ func (p *Process) openPanic(name string) io.WriteCloser {
 	return wc
 }
 
-func (p *Process) openErr() io.WriteCloser { return p.openPanic("err") }
+func (p *Process) openErr() io.WriteCloser  { return p.openPanic("err") }
 func (p *Process) openRetv() io.WriteCloser { return p.openPanic("retv") }
 
 func (p *Process) startProcessor(pf *Pluffer) error {
@@ -48,8 +48,8 @@ func (p *Process) startProcessor(pf *Pluffer) error {
 
 	p.served = true
 	go p.r.Run(&flexi.Stdio{
-		In: buf,
-		Err: p.openErr,
+		In:   buf,
+		Err:  p.openErr,
 		Retv: p.openRetv,
 	})
 
@@ -60,26 +60,26 @@ func ServeProcess(ln net.Listener, r flexi.Processor) error {
 	p := &Process{r: r, ln: ln}
 	files := []File{
 		&Pluffer{
-			Name: "ctl",
-			Perm: 0222,
+			Name:    "ctl",
+			Perm:    0222,
 			ModTime: time.Now(),
 			OnClose: p.startProcessor,
 		},
 		&DemuxBuffer{
-			Name: "retv",
-			Perm: 0444,
+			Name:    "retv",
+			Perm:    0444,
 			ModTime: time.Now(),
 		},
 		&DemuxBuffer{
-			Name: "err",
-			Perm: 0444,
+			Name:    "err",
+			Perm:    0444,
 			ModTime: time.Now(),
 		},
 	}
 	p.rootfs = &Dir{
-		Name: "/",
-		Files: files,
-		Perm: 0555,
+		Name:    "/",
+		Files:   files,
+		Perm:    0555,
 		ModTime: time.Now(),
 	}
 
@@ -89,8 +89,8 @@ func ServeProcess(ln net.Listener, r flexi.Processor) error {
 type Process struct {
 	served bool
 	rootfs *Dir
-	r flexi.Processor
-	ln net.Listener
+	r      flexi.Processor
+	ln     net.Listener
 }
 
 func (p *Process) Serve() error {
@@ -165,4 +165,3 @@ func (p *Process) Serve9P(s *styx.Session) {
 		p.serveRequest(s.Request())
 	}
 }
-

@@ -21,7 +21,7 @@ func (h *ProcessHelper) Retv(v interface{}) error {
 }
 
 func (h *ProcessHelper) Err(err error) error {
-	return encode(h.Stdio.Err(), &struct{
+	return encode(h.Stdio.Err(), &struct {
 		Error string `json:"error"`
 	}{
 		Error: err.Error(),

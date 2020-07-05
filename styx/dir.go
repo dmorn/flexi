@@ -1,18 +1,18 @@
 package styx
 
 import (
-	"os"
-	"time"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
+	"time"
 )
 
 // All public fields should be initialized before using the directory.
 type Dir struct {
-	Name  string
-	Files []File
-	Perm  os.FileMode
+	Name    string
+	Files   []File
+	Perm    os.FileMode
 	ModTime time.Time
 }
 
@@ -21,7 +21,7 @@ func (d *Dir) Stat() (os.FileInfo, error) {
 }
 
 func (d *Dir) Open() (interface{}, error) { return &DirReader{Dir: d}, nil }
-func (d *Dir) Truncate(size int64) error { return fmt.Errorf("not supported") }
+func (d *Dir) Truncate(size int64) error  { return fmt.Errorf("not supported") }
 
 func (d *Dir) Lookup(name string) (File, error) {
 	for _, v := range d.Files {
@@ -45,7 +45,7 @@ func (d DirInfo) Size() int64        { return 0 }
 func (d DirInfo) Mode() os.FileMode  { return d.Dir.Perm | os.ModeDir }
 func (d DirInfo) ModTime() time.Time { return d.Dir.ModTime }
 func (d DirInfo) IsDir() bool        { return true }
-func (d DirInfo) Sys() interface{}   {
+func (d DirInfo) Sys() interface{} {
 	reader, _ := d.Dir.Open()
 	return reader
 }

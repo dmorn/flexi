@@ -1,14 +1,14 @@
 package styx
 
 import (
-	"os"
 	"bytes"
+	"os"
 	"time"
 )
 
 type Pluffer struct {
-	Name string
-	Perm os.FileMode
+	Name    string
+	Perm    os.FileMode
 	ModTime time.Time
 	OnClose func(*Pluffer) error
 
@@ -22,7 +22,7 @@ func (p *Pluffer) Truncate(size int64) error {
 	return nil
 }
 
-func (p *Pluffer) Len() int64 { return int64(p.buf.Len()) }
+func (p *Pluffer) Len() int64                  { return int64(p.buf.Len()) }
 func (pf *Pluffer) Read(p []byte) (int, error) { return pf.buf.Read(p) }
 
 type PlufferInfo struct {
@@ -34,7 +34,7 @@ func (p PlufferInfo) Size() int64        { return int64(p.Pluffer.buf.Len()) }
 func (p PlufferInfo) Mode() os.FileMode  { return p.Pluffer.Perm }
 func (p PlufferInfo) ModTime() time.Time { return p.Pluffer.ModTime }
 func (p PlufferInfo) IsDir() bool        { return false }
-func (p PlufferInfo) Sys() interface{}   {
+func (p PlufferInfo) Sys() interface{} {
 	rwc, _ := p.Pluffer.Open()
 	return rwc
 }
@@ -43,7 +43,7 @@ type Plufferio struct {
 	pluffer *Pluffer
 }
 
-func (pf *Plufferio) Read(p []byte) (int, error) { return pf.pluffer.buf.Read(p) }
+func (pf *Plufferio) Read(p []byte) (int, error)  { return pf.pluffer.buf.Read(p) }
 func (pf *Plufferio) Write(p []byte) (int, error) { return pf.pluffer.buf.Write(p) }
 func (pf *Plufferio) Close() error {
 	if onClose := pf.pluffer.OnClose; onClose != nil {

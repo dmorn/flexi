@@ -16,4 +16,3 @@ func New() *Fargate {
 func (f *Fargate) Spawn(t flexi.Task) (*flexi.RemoteProcess, error) {
 	return nil, fmt.Errorf("not implemented yet")
 }
-

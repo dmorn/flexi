@@ -2,19 +2,19 @@ package styx
 
 import (
 	"bytes"
-	"os"
-	"time"
 	"fmt"
 	"io"
+	"os"
+	"time"
 )
 
 type DemuxBuffer struct {
-	Name string
-	Perm os.FileMode
+	Name    string
+	Perm    os.FileMode
 	ModTime time.Time
 
 	// TODO: protect from concurrent access.
-	bucket []byte
+	bucket  []byte
 	writers []io.Writer
 }
 
@@ -41,7 +41,7 @@ func (b *DemuxBuffer) Open() (interface{}, error) {
 	}
 
 	return &DemuxBufferio{
-		buf: bytes.NewBuffer(p),
+		buf:   bytes.NewBuffer(p),
 		demux: b,
 		onClose: func(d *DemuxBufferio) {
 			writers := make([]io.Writer, 0, len(b.writers))
@@ -70,23 +70,22 @@ func (d DemuxBufferInfo) Size() int64        { return d.DemuxBuffer.Len() }
 func (d DemuxBufferInfo) Mode() os.FileMode  { return d.DemuxBuffer.Perm }
 func (d DemuxBufferInfo) ModTime() time.Time { return d.DemuxBuffer.ModTime }
 func (d DemuxBufferInfo) IsDir() bool        { return false }
-func (d DemuxBufferInfo) Sys() interface{}   {
+func (d DemuxBufferInfo) Sys() interface{} {
 	bio, _ := d.DemuxBuffer.Open()
 	return bio
 }
 
 type DemuxBufferio struct {
-	demux *DemuxBuffer
-	buf *bytes.Buffer
+	demux   *DemuxBuffer
+	buf     *bytes.Buffer
 	onClose func(*DemuxBufferio)
 }
 
 func (b *DemuxBufferio) Write(p []byte) (int, error) { return b.buf.Write(p) }
-func (b *DemuxBufferio) Read(p []byte) (int, error) { return b.buf.Read(p) }
+func (b *DemuxBufferio) Read(p []byte) (int, error)  { return b.buf.Read(p) }
 func (b *DemuxBufferio) Close() error {
 	if onClose := b.onClose; onClose != nil {
 		onClose(b)
 	}
 	return nil
 }
-
