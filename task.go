@@ -1,12 +1,13 @@
 package flexi
 
-// Image describes what will be executed.
+import (
+	"context"
+)
+
 type Image struct {
-	// Type is usually docker.
-	Type string `json:"type"`
-	// Name is usually an address to a docker image stored
-	// in some registry.
-	Name string `json:"name"`
+	Type    string `json:"type"`
+	Name    string `json:"name"`
+	Service string `json:"service"`
 }
 
 // Based on the required capabilities, we'll choose where the
@@ -24,9 +25,12 @@ type Task struct {
 	Caps  *Caps  `json:"capabilities"`
 }
 
-type RemoteProcess struct {
+type RemoteProcess interface {
+	Addr() string
+	Name() string
 }
 
 type Spawner interface {
-	Spawn(Task) (*RemoteProcess, error)
+	Spawn(context.Context, Task) (RemoteProcess, error)
+	Kill(context.Context, RemoteProcess) error
 }
