@@ -4,10 +4,14 @@ import (
 	"context"
 )
 
-type Image struct {
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	Service string `json:"service"`
+// TODO: this is just one type of image that we might want
+// to pass around. Make the unmarshaling more flexible.
+type FargateImage struct {
+	Name           string   `json:"name"`
+	Service        string   `json:"service"`
+	Cluster        string   `json:"cluster"`
+	Subnets        []string `json:"subnets"`
+	SecurityGroups []string `json:"security_groups"`
 }
 
 // Based on the required capabilities, we'll choose where the
@@ -19,18 +23,22 @@ type Caps struct {
 }
 
 // Task defines **what** should be executed, on **which** hardware.
+// TODO: Image should be of type interface{}.
 type Task struct {
-	ID    string `json:"id"`
-	Image *Image `json:"image"`
-	Caps  *Caps  `json:"capabilities"`
+	ID        string        `json:"id"`
+	ImageType string        `json:"image_type"`
+	Image     *FargateImage `json:"image"`
+	Caps      *Caps         `json:"capabilities"`
 }
 
-type RemoteProcess interface {
-	Addr() string
-	Name() string
+type RemoteProcess struct {
+	Tags    []string `json:"tags"`
+	Addr    string   `json:"addr"`
+	Name    string   `json:"name"`
+	Cluster string   `json:"cluster"`
 }
 
 type Spawner interface {
-	Spawn(context.Context, Task) (RemoteProcess, error)
-	Kill(context.Context, RemoteProcess) error
+	Spawn(context.Context, Task) (*RemoteProcess, error)
+	Kill(context.Context, *RemoteProcess) error
 }
