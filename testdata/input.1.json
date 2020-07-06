@@ -1,12 +1,17 @@
 {
-    "capabilities": {
-        "cpu": 2,
-        "gpu": 0,
-        "ram": 4
-    },
-    "id": "example.1",
+    "caps": {},
+    "id": "echo64spawner",
     "image": {
-        "name": "to be defined",
-        "type": "docker"
-    }
+        "cluster": "tooling",
+        "name": "echo64",
+        "security_groups": [
+            "sg-01a4bacf92d52fc75"
+        ],
+        "service": "9pfs",
+        "subnets": [
+            "subnet-0f3a619bdcac8cd3c",
+            "subnet-052c680353e0dd406"
+        ]
+    },
+    "image_type": "fargate"
 }
