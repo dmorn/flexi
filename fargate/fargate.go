@@ -91,14 +91,14 @@ func (f *Fargate) waitRunningTask(ctx context.Context, cluster, arn string) (tas
 	}
 }
 
-type runTaskInput struct {
+type RunTaskInput struct {
 	Cluster        string
 	TaskDefinition string
 	Subnets        []string
 	SecurityGroups []string
 }
 
-func (f *Fargate) RunTask(ctx context.Context, p runTaskInput) (*ecs.Task, error) {
+func (f *Fargate) RunTask(ctx context.Context, p RunTaskInput) (*ecs.Task, error) {
 	input := &ecs.RunTaskInput{
 		Cluster:        stringPtr(p.Cluster),
 		LaunchType:     stringPtr(ecs.LaunchTypeFargate),
