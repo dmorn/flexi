@@ -12,7 +12,7 @@ import (
 )
 
 func exitf(format string, args ...interface{}) {
-	fmt.Printf("error * "+format, args...)
+	fmt.Printf("error * "+format+"\n", args...)
 	os.Exit(1)
 }
 
