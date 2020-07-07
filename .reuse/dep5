@@ -3,8 +3,6 @@ Upstream-Name: flexi
 Upstream-Contact: jecoz <danielmorandini@me.com>
 Source: https://github.com/jecoz/flexi
 
-# Sample paragraph, commented out:
-#
-# Files: src/*
-# Copyright: $YEAR $NAME <$CONTACT>
-# License: ...
+Files: go.mod go.sum docs/* testdata/*
+Copyright: 2020 jecoz <danielmorandini@me.com>
+License: BSD-3-Clause

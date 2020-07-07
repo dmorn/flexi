@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2020 jecoz
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
 ### Echo64
 In one terminal, start the 9p server:
 ```
