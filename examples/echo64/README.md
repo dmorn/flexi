@@ -9,7 +9,7 @@ A docker image is also available
 % docker run -p 564:564 danielmorandini/echo64
 ```
 
-In another one, use it:
+In another one, use it (you need a 9p driver for mounting this server in your fs. On macos, you can use [plan9port](https://9fans.github.io/plan9port/):
 ```
 % 9 mount localhost:564 mnt # This is how you mount a 9p fs using 9port
 % echo "hello" > mnt/ctl
