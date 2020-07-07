@@ -187,7 +187,7 @@ func eniFromTask(task *ecs.Task) (string, error) {
 }
 
 func (f *Fargate) Spawn(ctx context.Context, t flexi.Task) (*flexi.RemoteProcess, error) {
-	task, err := f.RunTask(ctx, runTaskInput{
+	task, err := f.RunTask(ctx, RunTaskInput{
 		Cluster:        t.Image.Cluster,
 		TaskDefinition: t.Image.Name,
 		Subnets:        t.Image.Subnets,
