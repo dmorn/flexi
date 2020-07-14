@@ -16,7 +16,7 @@ import (
 	"github.com/jecoz/flexi"
 )
 
-const MaxBackoffMsec = 30000
+const LastStatusPollInterval = time.Millisecond * time.Duration(500)
 
 type Fargate struct {
 	sess   *session.Session
@@ -65,15 +65,8 @@ func (f *Fargate) waitRunningTask(ctx context.Context, cluster, arn string) (tas
 	// Stop when the context is invalidated or the response is no longer
 	// successfull. We're waiting a pending process to become running here,
 	// not to resume from a lost connection.
-	for n := 1; ; n++ {
-		// I borrowed this choice from
-		// https://github.com/tailscale/tailscale/blob/abd79ea3685d41afbac5fb9d4c58c4423c60a409/logtail/backoff/backoff.go#L42
-		msec := n * n * 10
-		if msec > MaxBackoffMsec {
-			msec = MaxBackoffMsec
-		}
-		wait := time.Duration(msec) * time.Millisecond
-		timer := time.NewTimer(wait)
+	for {
+		timer := time.NewTimer(LastStatusPollInterval)
 		select {
 		case <-timer.C:
 			task, err = f.DescribeTask(ctx, cluster, arn)
