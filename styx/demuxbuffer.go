@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"time"
+	"sync"
 )
 
 type DemuxBuffer struct {
@@ -44,8 +45,11 @@ func (b *DemuxBuffer) Open() (interface{}, error) {
 		return nil, io.ErrShortWrite
 	}
 
-	return &DemuxBufferio{
-		buf:   bytes.NewBuffer(p),
+	bio := &DemuxBufferio{
+		buf: &blockingReader{
+			cond: sync.NewCond(new(sync.Mutex)),
+			buf:  bytes.NewBuffer(p),
+		},
 		demux: b,
 		onClose: func(d *DemuxBufferio) {
 			writers := make([]io.Writer, 0, len(b.writers))
@@ -56,7 +60,9 @@ func (b *DemuxBuffer) Open() (interface{}, error) {
 			}
 			b.writers = writers
 		},
-	}, nil
+	}
+	b.writers = append(b.writers, bio)
+	return bio, nil
 }
 
 func (b *DemuxBuffer) Stat() (os.FileInfo, error) { return DemuxBufferInfo{b}, nil }
@@ -79,9 +85,32 @@ func (d DemuxBufferInfo) Sys() interface{} {
 	return bio
 }
 
+type blockingReader struct {
+	buf  *bytes.Buffer
+	cond *sync.Cond
+}
+
+func (br *blockingReader) Write(b []byte) (ln int, err error) {
+	fmt.Printf("write called: [%v]\n", b)
+	ln, err = br.buf.Write(b)
+	br.cond.Broadcast()
+	return
+}
+
+func (br *blockingReader) Read(b []byte) (ln int, err error) {
+	ln, err = br.buf.Read(b)
+	if err == io.EOF {
+		br.cond.L.Lock()
+		br.cond.Wait()
+		br.cond.L.Unlock()
+		ln, err = br.buf.Read(b)
+	}
+	return
+}
+
 type DemuxBufferio struct {
 	demux   *DemuxBuffer
-	buf     *bytes.Buffer
+	buf     *blockingReader
 	onClose func(*DemuxBufferio)
 }
 
