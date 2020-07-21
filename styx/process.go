@@ -32,18 +32,18 @@ func (p *Process) panicOpen(name string) io.WriteCloser {
 func (p *Process) openErr() io.WriteCloser  { return p.panicOpen("err") }
 func (p *Process) openRetv() io.WriteCloser { return p.panicOpen("retv") }
 
-func (p *Process) startProcessor(f *Fuffer) error {
+func (p *Process) startProcessor(ib *InputBuffer) error {
 	if p.served {
 		return errors.New("process: served already")
 	}
 
-	if f.Size() == 0 {
-		// ctl fuffer was closed but no data has been
+	if ib.Size() == 0 {
+		// ctl was closed but no data has been
 		// written to it.
 		return nil
 	}
 	buf := new(bytes.Buffer)
-	_, err := io.Copy(buf, f)
+	_, err := io.Copy(buf, ib)
 	if err != nil {
 		return err
 	}
@@ -62,9 +62,9 @@ func ServeProcess(ln net.Listener, r flexi.Processor) error {
 	p := &Process{r: r, ln: ln}
 
 	files := []File{
-		NewCloseFuffer("ctl", 0222, p.startProcessor),
-		NewPipeFuffer("retv", 0444),
-		NewPipeFuffer("err", 0444),
+		NewInputBuffer("ctl", p.startProcessor),
+		NewOutputBuffer("retv"),
+		NewOutputBuffer("err"),
 	}
 	p.rootfs = &Dir{
 		Name:    "/",
