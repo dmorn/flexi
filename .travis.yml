@@ -1,0 +1,10 @@
+language: go
+
+os:
+  - linux
+  - darwin
+  - plan9
+  - windows
+
+script: go build examples/echo64/main.go
+
