@@ -6,20 +6,19 @@ package styx
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
 	"log"
 	"net"
 	"os"
-	"path/filepath"
 	"time"
 
 	"aqwari.net/net/styx"
 	"github.com/jecoz/flexi"
 )
 
-func (p *Process) openPanic(name string) io.WriteCloser {
-	file, err := p.rootfs.Lookup(name)
+func (p *Process) panicOpen(name string) io.WriteCloser {
+	file, err := p.lookup(name)
 	if err != nil {
 		panic("open buffer: " + err.Error())
 	}
@@ -30,22 +29,21 @@ func (p *Process) openPanic(name string) io.WriteCloser {
 	return wc
 }
 
-func (p *Process) openErr() io.WriteCloser  { return p.openPanic("err") }
-func (p *Process) openRetv() io.WriteCloser { return p.openPanic("retv") }
+func (p *Process) openErr() io.WriteCloser  { return p.panicOpen("err") }
+func (p *Process) openRetv() io.WriteCloser { return p.panicOpen("retv") }
 
-func (p *Process) startProcessor(pf *Pluffer) error {
+func (p *Process) startProcessor(f *Fuffer) error {
 	if p.served {
-		return fmt.Errorf("process already executed")
+		return errors.New("process: served already")
 	}
 
-	pflen := pf.Len()
-	if pflen == 0 {
-		// ctl pluffer was closed but no data has been
+	if f.Size() == 0 {
+		// ctl fuffer was closed but no data has been
 		// written to it.
 		return nil
 	}
 	buf := new(bytes.Buffer)
-	_, err := io.Copy(buf, pf)
+	_, err := io.Copy(buf, f)
 	if err != nil {
 		return err
 	}
@@ -62,23 +60,11 @@ func (p *Process) startProcessor(pf *Pluffer) error {
 
 func ServeProcess(ln net.Listener, r flexi.Processor) error {
 	p := &Process{r: r, ln: ln}
+
 	files := []File{
-		&Pluffer{
-			Name:    "ctl",
-			Perm:    0222,
-			ModTime: time.Now(),
-			OnClose: p.startProcessor,
-		},
-		&DemuxBuffer{
-			Name:    "retv",
-			Perm:    0444,
-			ModTime: time.Now(),
-		},
-		&DemuxBuffer{
-			Name:    "err",
-			Perm:    0444,
-			ModTime: time.Now(),
-		},
+		NewCloseFuffer("ctl", 0222, p.startProcessor),
+		NewPipeFuffer("retv", 0444),
+		NewPipeFuffer("err", 0444),
 	}
 	p.rootfs = &Dir{
 		Name:    "/",
@@ -112,22 +98,8 @@ func (p *Process) Serve() error {
 
 func (p *Process) Close() error { return p.ln.Close() }
 
-type File interface {
-	Stat() (os.FileInfo, error)
-	Open() (interface{}, error)
-	Truncate(int64) error
-}
-
 func (p *Process) lookup(path string) (File, error) {
-	switch path {
-	case "/":
-		return p.rootfs, nil
-	case "/ctl", "/status", "/retv", "/err":
-		_, file := filepath.Split(path)
-		return p.rootfs.Lookup(file)
-	default:
-		return nil, os.ErrNotExist
-	}
+	return p.rootfs.Lookup(path)
 }
 
 func (p *Process) open(path string) (interface{}, error) {
@@ -135,7 +107,15 @@ func (p *Process) open(path string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return file.Open()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() {
+		return file.OpenDir()
+	} else {
+		return file.OpenFile()
+	}
 }
 
 func (p *Process) stat(path string) (os.FileInfo, error) {

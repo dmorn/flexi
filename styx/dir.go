@@ -5,11 +5,14 @@
 package styx
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"aqwari.net/net/styx"
 )
 
 // All public fields should be initialized before using the directory.
@@ -21,45 +24,50 @@ type Dir struct {
 }
 
 func (d *Dir) Stat() (os.FileInfo, error) {
-	return &DirInfo{Dir: d}, nil
+	return finfo{
+		name:    filepath.Dir(d.Name),
+		mode:    d.Perm | os.ModeDir,
+		modTime: d.ModTime,
+		isDir:   true,
+		o:       d,
+		s:       d,
+	}, nil
 }
 
-func (d *Dir) Open() (interface{}, error) { return &DirReader{Dir: d}, nil }
-func (d *Dir) Truncate(size int64) error  { return fmt.Errorf("not supported") }
+func (d *Dir) Truncate(size int64) error { return errors.New("dir: truncate not supported") }
+func (d *Dir) Size() int64               { return 0 }
 
+func (d *Dir) OpenDir() (styx.Directory, error) {
+	return &dirReader{Dir: d}, nil
+}
+
+func (d *Dir) OpenFile() (io.ReadWriteCloser, error) {
+	return nil, errors.New("dir: open file: not a regular file")
+}
 func (d *Dir) Lookup(name string) (File, error) {
+	if name == d.Name {
+		return d, nil
+	}
+	filename := strings.TrimPrefix(name, d.Name)
+
 	for _, v := range d.Files {
 		info, err := v.Stat()
 		if err != nil {
 			continue
 		}
-		if info.Name() == name {
+		if info.Name() == filename {
 			return v, nil
 		}
 	}
 	return nil, os.ErrNotExist
 }
 
-type DirInfo struct {
-	*Dir
-}
-
-func (d DirInfo) Name() string       { return filepath.Dir(d.Dir.Name) }
-func (d DirInfo) Size() int64        { return 0 }
-func (d DirInfo) Mode() os.FileMode  { return d.Dir.Perm | os.ModeDir }
-func (d DirInfo) ModTime() time.Time { return d.Dir.ModTime }
-func (d DirInfo) IsDir() bool        { return true }
-func (d DirInfo) Sys() interface{} {
-	reader, _ := d.Dir.Open()
-	return reader
-}
-
-type DirReader struct {
+type dirReader struct {
 	*Dir
 	offset int
 }
 
-func (d *DirReader) Readdir(n int) ([]os.FileInfo, error) {
+func (d *dirReader) Readdir(n int) ([]os.FileInfo, error) {
 	if d.Dir == nil {
 		return nil, os.ErrInvalid
 	}
