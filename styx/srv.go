@@ -5,11 +5,15 @@
 package styx
 
 import (
-	"errors"
+	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 
 	"aqwari.net/net/styx"
@@ -17,9 +21,9 @@ import (
 )
 
 type Srv struct {
-	Mntpt string
-	Ln    net.Listener
-	S     flexi.Spawner
+	Mtpt string
+	Ln   net.Listener
+	S    flexi.Spawner
 
 	index int
 	fs    *fs
@@ -44,15 +48,49 @@ func (srv *Srv) Serve9P(s *styx.Session) {
 	}
 }
 
-func (srv *Srv) SpawnProcess(rc io.ReadCloser) error {
+func (srv *Srv) spawn(ctx context.Context, rc io.ReadCloser) error {
 	defer rc.Close()
-	return errors.New("spawn process: not implemented yet")
+
+	var task flexi.Task
+	if err := json.NewDecoder(rc).Decode(&task); err != nil {
+		return fmt.Errorf("spawn process: %w", err)
+	}
+	rp, err := srv.S.Spawn(ctx, task)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("SPAWNED")
+	if err := json.NewEncoder(os.Stdout).Encode(rp); err != nil {
+		return err
+	}
+	name := fmt.Sprintf("%d", srv.index)
+	mtpt := filepath.Join(srv.Mtpt, name)
+	fmt.Printf("name: %v, mptp: %v\n", name, mtpt)
+	cmd := exec.Command("9", "mount", rp.Addr, mtpt)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	srv.index++
+
+	fmt.Printf("MOUNTED @ %v\n", mtpt)
+	return nil
+}
+
+func (srv *Srv) SpawnProcess(rc io.ReadCloser) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	defer cancel()
+	if err := srv.spawn(ctx, rc); err != nil {
+		log.Printf("ERROR * %v", err)
+		return err
+	}
+	return nil
 }
 
 // ServeFlexi creates a styx process serving 9p over ln. To gracefully shutdown
 // the server, close the listener.
 func ServeFlexi(ln net.Listener, mntpt string, s flexi.Spawner) error {
-	srv := &Srv{Mntpt: mntpt, Ln: ln, S: s}
+	srv := &Srv{Mtpt: mntpt, Ln: ln, S: s}
 	ctl := NewInputBuffer("ctl", srv.SpawnProcess)
 	root := &Dir{
 		Name:    "",
