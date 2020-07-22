@@ -12,14 +12,16 @@ type Stdio struct {
 	// the execution of the process.
 	In io.Reader
 	// Write here execution errors.
-	Err func() io.WriteCloser
+	Err io.WriteCloser
 	// Write here final output.
-	Retv func() io.WriteCloser
+	Retv io.WriteCloser
 }
 
 // Processor describes an entity that is capable of executing
 // a task reading and writing from Stdio.
 type Processor interface {
+	// Stdio Err and Retv buffers should not be used
+	// after Run returns.
 	Run(*Stdio)
 }
 

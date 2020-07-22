@@ -15,17 +15,20 @@ type ProcessHelper struct {
 	*flexi.Stdio
 }
 
-func encode(w io.WriteCloser, v interface{}) error {
-	defer w.Close()
+func encode(w io.Writer, v interface{}) error {
 	return json.NewEncoder(w).Encode(v)
 }
 
+// Retv encodes and writes in json format v inside the internal
+// retv WriteCloser. Closes the destination after usage.
 func (h *ProcessHelper) Retv(v interface{}) error {
-	return encode(h.Stdio.Retv(), v)
+	return encode(h.Stdio.Retv, v)
 }
 
+// Retv encodes and writes in json format err inside the internal
+// err WriteCloser. Closes the destination after usage.
 func (h *ProcessHelper) Err(err error) error {
-	return encode(h.Stdio.Err(), &struct {
+	return encode(h.Stdio.Err, &struct {
 		Error string `json:"error"`
 	}{
 		Error: err.Error(),

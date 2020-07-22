@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"aqwari.net/net/styx"
@@ -61,17 +62,17 @@ type hackedCloser struct {
 }
 
 func (hc *hackedCloser) Close() error { return hc.close() }
+func newHackedCloser(rwc io.ReadWriteCloser, close func() error) *hackedCloser {
+	return &hackedCloser{rwc, close}
+}
 
 func (ib *InputBuffer) OpenFile() (io.ReadWriteCloser, error) {
-	return &hackedCloser{
-		ib,
-		func() error {
-			if err := ib.OnClose(ib); err != nil {
-				return fmt.Errorf("input buffer: %w", err)
-			}
-			return nil
-		},
-	}, nil
+	return newHackedCloser(ib, func() error {
+		if err := ib.OnClose(ib); err != nil {
+			return fmt.Errorf("input buffer: %w", err)
+		}
+		return nil
+	}), nil
 }
 
 func (ib *InputBuffer) Stat() (os.FileInfo, error) {
@@ -130,6 +131,8 @@ func (s *stream) Write(p []byte) (int, error) {
 
 type OutputBuffer struct {
 	Buffer
+
+	sync.RWMutex
 	writers map[io.ReadWriteCloser]struct{}
 	closed  bool
 }
@@ -139,6 +142,9 @@ var _ File = &OutputBuffer{}
 // Write will unlock stream readers returned with Open. Up to that
 // point, they'll be waiting for some input to come.
 func (ob *OutputBuffer) Write(p []byte) (int, error) {
+	ob.RLock()
+	defer ob.RUnlock()
+
 	writers := make([]io.Writer, 0, len(ob.writers)+1)
 	// First append the buffer itself: when clients connect after
 	// the process closes the output buffer, we'll read stuff from there.
@@ -155,7 +161,11 @@ func (ob *OutputBuffer) Write(p []byte) (int, error) {
 // Keeping on calling Close till nil is returned will eventually close
 // every stream.
 func (ob *OutputBuffer) Close() error {
-	defer func() { ob.closed = true }()
+	ob.Lock()
+	defer func() {
+		ob.closed = true
+		ob.Unlock()
+	}()
 
 	writers := make(map[io.ReadWriteCloser]struct{})
 	for k, v := range ob.writers {
@@ -192,19 +202,20 @@ func (ob *OutputBuffer) OpenFile() (io.ReadWriteCloser, error) {
 		return ob.openBuffer()
 	}
 
+	ob.Lock()
 	// output may still come. Create the stream.
 	s := &stream{buf: make(chan byte, MaxStreamBuffer)}
 	ob.writers[s] = struct{}{}
+	ob.Unlock()
 
-	return &hackedCloser{
-		s,
-		func() error {
-			// First remove the pipe from the list of writers, or it
-			// may make the MultiWriter fail. Close the pipe afterwards.
-			delete(ob.writers, s)
-			return s.Close()
-		},
-	}, nil
+	return newHackedCloser(s, func() error {
+		ob.Lock()
+		defer ob.Unlock()
+		// First remove the pipe from the list of writers, or it
+		// may make the MultiWriter fail. Close the pipe afterwards.
+		delete(ob.writers, s)
+		return s.Close()
+	}), nil
 }
 
 func (ob *OutputBuffer) Stat() (os.FileInfo, error) {

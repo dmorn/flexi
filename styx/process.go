@@ -49,11 +49,16 @@ func (p *Process) startProcessor(ib *InputBuffer) error {
 	}
 
 	p.served = true
-	go p.r.Run(&flexi.Stdio{
-		In:   buf,
-		Err:  p.openErr,
-		Retv: p.openRetv,
-	})
+	go func() {
+		stdio := &flexi.Stdio{
+			In:   buf,
+			Err:  p.openErr(),
+			Retv: p.openRetv(),
+		}
+		p.r.Run(stdio)
+		stdio.Err.Close()
+		stdio.Retv.Close()
+	}()
 
 	return nil
 }
