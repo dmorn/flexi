@@ -41,15 +41,13 @@ func (b *Buffer) Stat(opener Opener) os.FileInfo {
 	}
 }
 
-type InputBufferHook func(*InputBuffer) error
-
 var _ File = &InputBuffer{}
 
 // InputBuffer collects data till it is explicitly closed.
 // When it is, calls the OnClose function.
 type InputBuffer struct {
 	Buffer
-	OnClose InputBufferHook
+	CloseHook func(io.ReadCloser) error
 }
 
 func (ib *InputBuffer) OpenDir() (styx.Directory, error) {
@@ -68,7 +66,12 @@ func newHackedCloser(rwc io.ReadWriteCloser, close func() error) *hackedCloser {
 
 func (ib *InputBuffer) OpenFile() (io.ReadWriteCloser, error) {
 	return newHackedCloser(ib, func() error {
-		if err := ib.OnClose(ib); err != nil {
+		if ib.Size() == 0 {
+			// ctl was closed but no data has been
+			// written to it.
+			return nil
+		}
+		if err := ib.CloseHook(ib); err != nil {
 			return fmt.Errorf("input buffer: %w", err)
 		}
 		return nil
@@ -79,14 +82,14 @@ func (ib *InputBuffer) Stat() (os.FileInfo, error) {
 	return ib.Buffer.Stat(ib), nil
 }
 
-func NewInputBuffer(name string, h InputBufferHook) *InputBuffer {
+func NewInputBuffer(name string, h func(io.ReadCloser) error) *InputBuffer {
 	return &InputBuffer{
 		Buffer: Buffer{
 			Name:    name,
 			Perm:    0222,
 			ModTime: time.Now(),
 		},
-		OnClose: h,
+		CloseHook: h,
 	}
 }
 

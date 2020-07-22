@@ -5,6 +5,7 @@
 package styx
 
 import (
+	"errors"
 	"io"
 	"os"
 	"time"
@@ -56,4 +57,28 @@ func (i finfo) Sys() (v interface{}) {
 		panic(err)
 	}
 	return
+}
+
+type regularFile struct {
+	path string
+	info os.FileInfo
+}
+
+var _ File = &regularFile{}
+
+func (f *regularFile) OpenDir() (styx.Directory, error) {
+	return nil, errors.New("regular file: open dir: not a directory")
+}
+
+func (f *regularFile) OpenFile() (io.ReadWriteCloser, error) {
+	return os.Open(f.path)
+}
+
+func (f *regularFile) Stat() (os.FileInfo, error) { return f.info, nil }
+func (f *regularFile) Truncate(n int64) error {
+	file, err := os.Open(f.path)
+	if err != nil {
+		return err
+	}
+	return file.Truncate(n)
 }

@@ -15,17 +15,53 @@ import (
 	"aqwari.net/net/styx"
 )
 
+// DiskLs returns an Ls function that inspects path on disk. Basically
+// it works just like Unix's ls command, but returns a list of File.
+// It can be used to create Dir instances that act on the disk.
+func DiskLs(path string) func() []File {
+	return func() []File {
+		dir, err := os.Open(path)
+		if err != nil {
+			return []File{}
+		}
+		defer dir.Close()
+
+		// Even though Readdir might return an error, it will
+		// return the FileInfos found till that point. That's
+		// enough for our use-case.
+		infos, _ := dir.Readdir(-1)
+		files := make([]File, len(infos))
+		for i, v := range infos {
+			path := filepath.Join(path, v.Name())
+			if v.IsDir() {
+				files[i] = &Dir{
+					Name:    v.Name(),
+					Perm:    v.Mode(),
+					ModTime: v.ModTime(),
+					Ls:      DiskLs(path),
+				}
+			} else {
+				files[i] = &regularFile{
+					path: path,
+					info: v,
+				}
+			}
+		}
+		return files
+	}
+}
+
 // All public fields should be initialized before using the directory.
 type Dir struct {
 	Name    string
-	Files   []File
+	Ls      func() []File
 	Perm    os.FileMode
 	ModTime time.Time
 }
 
 func (d *Dir) Stat() (os.FileInfo, error) {
 	return finfo{
-		name:    filepath.Dir(d.Name),
+		name:    d.Name,
 		mode:    d.Perm | os.ModeDir,
 		modTime: d.ModTime,
 		isDir:   true,
@@ -50,7 +86,7 @@ func (d *Dir) Lookup(name string) (File, error) {
 	}
 	filename := strings.TrimPrefix(name, d.Name)
 
-	for _, v := range d.Files {
+	for _, v := range d.Ls() {
 		info, err := v.Stat()
 		if err != nil {
 			continue
@@ -71,10 +107,11 @@ func (d *dirReader) Readdir(n int) ([]os.FileInfo, error) {
 	if d.Dir == nil {
 		return nil, os.ErrInvalid
 	}
-	if d.offset >= len(d.Dir.Files) {
+	all := d.Dir.Ls()
+	if d.offset >= len(all) {
 		return nil, io.EOF
 	}
-	files := d.Dir.Files[d.offset:]
+	files := all[d.offset:]
 	count := len(files)
 	take := n
 	if take <= 0 || take > count {

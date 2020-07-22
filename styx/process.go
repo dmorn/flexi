@@ -18,7 +18,7 @@ import (
 )
 
 func (p *Process) panicOpen(name string) io.WriteCloser {
-	file, err := p.lookup(name)
+	file, err := p.fs.Lookup(name)
 	if err != nil {
 		panic("open buffer: " + err.Error())
 	}
@@ -32,18 +32,14 @@ func (p *Process) panicOpen(name string) io.WriteCloser {
 func (p *Process) openErr() io.WriteCloser  { return p.panicOpen("err") }
 func (p *Process) openRetv() io.WriteCloser { return p.panicOpen("retv") }
 
-func (p *Process) startProcessor(ib *InputBuffer) error {
+func (p *Process) startProcessor(rc io.ReadCloser) error {
+	defer rc.Close()
 	if p.served {
 		return errors.New("process: served already")
 	}
 
-	if ib.Size() == 0 {
-		// ctl was closed but no data has been
-		// written to it.
-		return nil
-	}
 	buf := new(bytes.Buffer)
-	_, err := io.Copy(buf, ib)
+	_, err := io.Copy(buf, rc)
 	if err != nil {
 		return err
 	}
@@ -63,6 +59,8 @@ func (p *Process) startProcessor(ib *InputBuffer) error {
 	return nil
 }
 
+// ServeProcess creates a styx process serving 9p over ln. To gracefully shutdown
+// the server, close the listener.
 func ServeProcess(ln net.Listener, r flexi.Processor) error {
 	p := &Process{r: r, ln: ln}
 
@@ -71,12 +69,15 @@ func ServeProcess(ln net.Listener, r flexi.Processor) error {
 		NewOutputBuffer("retv"),
 		NewOutputBuffer("err"),
 	}
-	p.rootfs = &Dir{
-		Name:    "/",
-		Files:   files,
+	root := &Dir{
+		Name: "",
+		Ls: func() []File {
+			return files
+		},
 		Perm:    0555,
 		ModTime: time.Now(),
 	}
+	p.fs = &fs{Root: root}
 
 	return p.Serve()
 }
@@ -84,6 +85,7 @@ func ServeProcess(ln net.Listener, r flexi.Processor) error {
 type Process struct {
 	served bool
 	rootfs *Dir
+	fs     *fs
 	r      flexi.Processor
 	ln     net.Listener
 }
@@ -101,56 +103,8 @@ func (p *Process) Serve() error {
 	return srv.Serve(p.ln)
 }
 
-func (p *Process) Close() error { return p.ln.Close() }
-
-func (p *Process) lookup(path string) (File, error) {
-	return p.rootfs.Lookup(path)
-}
-
-func (p *Process) open(path string) (interface{}, error) {
-	file, err := p.lookup(path)
-	if err != nil {
-		return nil, err
-	}
-	info, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if info.IsDir() {
-		return file.OpenDir()
-	} else {
-		return file.OpenFile()
-	}
-}
-
-func (p *Process) stat(path string) (os.FileInfo, error) {
-	file, err := p.lookup(path)
-	if err != nil {
-		return nil, err
-	}
-	return file.Stat()
-}
-func (p *Process) serveRequest(t styx.Request) {
-	switch msg := t.(type) {
-	case styx.Topen:
-		msg.Ropen(p.open(msg.Path()))
-	case styx.Twalk:
-		msg.Rwalk(p.stat(msg.Path()))
-	case styx.Tstat:
-		msg.Rstat(p.stat(msg.Path()))
-	case styx.Ttruncate:
-		file, err := p.lookup(msg.Path())
-		if err != nil {
-			msg.Rtruncate(err)
-			return
-		}
-		msg.Rtruncate(file.Truncate(msg.Size))
-	default:
-	}
-}
-
 func (p *Process) Serve9P(s *styx.Session) {
 	for s.Next() {
-		p.serveRequest(s.Request())
+		p.fs.serveRequest(s.Request())
 	}
 }
