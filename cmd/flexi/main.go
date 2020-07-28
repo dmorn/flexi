@@ -11,13 +11,13 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/jecoz/flexi"
 	"github.com/jecoz/flexi/fargate"
-	"github.com/jecoz/flexi/styx"
 )
 
 func main() {
 	port := flag.String("port", "9pfs", "Server listening port")
-	mntpt := flag.String("m", "pmnt", "Remote processes mount point")
+	mtpt := flag.String("m", "pmnt", "Remote processes mount point")
 	flag.Parse()
 
 	addr := net.JoinHostPort("", *port)
@@ -35,7 +35,7 @@ func main() {
 		ln.Close()
 	}()
 
-	if err := styx.ServeFlexi(ln, *mntpt, new(fargate.Fargate)); err != nil {
+	if err := flexi.ServeFlexi(ln, *mtpt, new(fargate.Fargate)); err != nil {
 		log.Printf("flexi server error * %v", err)
 	}
 }
