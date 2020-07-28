@@ -16,7 +16,6 @@ import (
 
 	"github.com/jecoz/flexi"
 	"github.com/jecoz/flexi/json"
-	"github.com/jecoz/flexi/styx"
 )
 
 func main() {
@@ -38,7 +37,7 @@ func main() {
 		ln.Close()
 	}()
 
-	if err := styx.ServeProcess(ln, flexi.ProcessorFunc(func(i *flexi.Stdio) {
+	if err := flexi.ServeProcess(ln, flexi.ProcessorFunc(func(i *flexi.Stdio) {
 		b := new(bytes.Buffer)
 		if _, err := io.Copy(b, i.In); err != nil {
 			panic("copy: " + err.Error())
