@@ -36,8 +36,8 @@ func (h *JsonHelper) Err(w io.Writer, err error) {
 	})
 }
 
-func DecodeTask(r io.Reader) (task *Task, err error) {
-	err = json.NewDecoder(r).Decode(task)
+func DecodeTask(r io.Reader) (task Task, err error) {
+	err = json.NewDecoder(r).Decode(&task)
 	return
 }
 
