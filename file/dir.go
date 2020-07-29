@@ -62,8 +62,9 @@ func (d *Dir) Append(f fs.File) {
 	d.Lock()
 	defer d.Unlock()
 	d.modTime = time.Now()
+	oldls := d.ls
 	d.ls = func() []fs.File {
-		return append(d.ls(), f)
+		return append(oldls(), f)
 	}
 }
 
@@ -130,7 +131,10 @@ func (d *dirReader) Readdir(n int) ([]os.FileInfo, error) {
 	if d.Dir == nil {
 		return nil, os.ErrInvalid
 	}
+	d.Dir.Lock()
 	all := d.Dir.ls()
+	d.Dir.Unlock()
+
 	if d.offset >= len(all) {
 		return nil, io.EOF
 	}
