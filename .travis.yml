@@ -1,4 +1,5 @@
 language: go
+- 1.14.x
 
 os:
   - linux
@@ -6,5 +7,7 @@ os:
   - plan9
   - windows
 
-script: go build examples/echo64/main.go
+env:
+  - GO111MODULE=on
 
+script: go build examples/echo64/main.go
