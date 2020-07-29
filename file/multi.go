@@ -35,8 +35,6 @@ func (m *Multi) Write(p []byte) (int, error) {
 	m.Unlock()
 
 	m.RLock()
-	defer m.RUnlock()
-
 	writers := make([]io.Writer, 0, len(m.writers)+1)
 
 	// First append the buffer itself: when clients connect after
@@ -45,6 +43,8 @@ func (m *Multi) Write(p []byte) (int, error) {
 	for k, _ := range m.writers {
 		writers = append(writers, k)
 	}
+	m.RUnlock()
+
 	return io.MultiWriter(writers...).Write(p)
 }
 
