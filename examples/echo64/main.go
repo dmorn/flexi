@@ -39,7 +39,6 @@ func main() {
 
 	if err := flexi.ServeProcess(ln, flexi.ProcessorFunc(func(i *flexi.Stdio) {
 		h := &flexi.JsonHelper{}
-
 		b := new(bytes.Buffer)
 		if _, err := io.Copy(b, i.In); err != nil {
 			h.Err(i.Err, fmt.Errorf("copy: %w", err))
