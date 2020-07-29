@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -15,7 +16,6 @@ import (
 	"os/signal"
 
 	"github.com/jecoz/flexi"
-	"github.com/jecoz/flexi/json"
 )
 
 func main() {
@@ -38,21 +38,24 @@ func main() {
 	}()
 
 	if err := flexi.ServeProcess(ln, flexi.ProcessorFunc(func(i *flexi.Stdio) {
+		h := &flexi.JsonHelper{}
+
 		b := new(bytes.Buffer)
 		if _, err := io.Copy(b, i.In); err != nil {
-			panic("copy: " + err.Error())
+			h.Err(i.Err, fmt.Errorf("copy: %w", err))
+			return
 		}
 		encoded := base64.StdEncoding.EncodeToString(b.Bytes())
 
-		h := &json.ProcessHelper{i}
-		if err := h.Retv(&struct {
+		if err := h.Encode(i.Retv, &struct {
 			Original string `json:"original"`
 			Base64   string `json:"base64"`
 		}{
 			Original: b.String(),
 			Base64:   encoded,
 		}); err != nil {
-			panic("retv: " + err.Error())
+			h.Err(i.Err, fmt.Errorf("retv: %w", err))
+			return
 		}
 	})); err != nil {
 		log.Printf("server error * %v", err)
