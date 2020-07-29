@@ -54,9 +54,6 @@ func ServeProcess(ln net.Listener, r Processor) error {
 	err := file.NewMulti("err")
 	retv := file.NewMulti("retv")
 	ctl := file.NewPlumber("ctl", func(p *file.Plumber) bool {
-		if p.Size() == 0 {
-			return false
-		}
 		buf := new(bytes.Buffer)
 		if _, err := io.Copy(buf, p); err != nil {
 			return false
