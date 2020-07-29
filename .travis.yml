@@ -1,10 +1,18 @@
+# SPDX-FileCopyrightText: 2020 jecoz
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 language: go
+
+go:
+  - 1.14.x
 
 os:
   - linux
   - darwin
   - plan9
-  - windows
+
+env:
+  - GO111MODULE=on
 
 script: go build examples/echo64/main.go
-
