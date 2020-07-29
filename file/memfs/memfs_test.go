@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/jecoz/flexi/file"
-	"github.com/jecoz/flexi/fs"
 )
 
 func TestOpen(t *testing.T) {
@@ -20,6 +19,10 @@ func TestOpen(t *testing.T) {
 		{
 			path: "/retv",
 			dir:  file.NewDirFiles("", file.NewMulti("retv")),
+		},
+		{
+			path: "/0/spawn",
+			dir:  file.NewDirFiles("", file.NewDirFiles("0", file.NewMulti("spawn"))),
 		},
 	}
 
