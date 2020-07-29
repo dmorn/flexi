@@ -24,6 +24,8 @@ type Stdio struct {
 	Err io.WriteCloser
 	// Write here final output.
 	Retv io.WriteCloser
+	// Write here status updates.
+	Status io.WriteCloser
 }
 
 // Processor describes an entity that is capable of executing
