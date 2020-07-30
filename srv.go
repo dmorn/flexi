@@ -31,8 +31,8 @@ func (s *Srv) Serve() error {
 	return styx.Serve(s.Ln, s.FS)
 }
 
-func (s *Srv) NewRemote(name string, done func(*Remote)) (r *Remote, err error) {
-	r, err = NewRemote(s.Mtpt, name, s.Spawner)
+func (s *Srv) NewRemote(index int64, done func(*Remote)) (r *Remote, err error) {
+	r, err = NewRemote(s.Mtpt, index, s.Spawner)
 	if err != nil {
 		return
 	}
@@ -50,14 +50,13 @@ func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
 		// Users read the clone file to obtain
 		// a new remote process.
 		i := srv.pool.Get()
-		name := strconv.FormatInt(i, 10)
-		s := []byte(name)
+		s := []byte(strconv.FormatInt(i, 10))
 		if len(s) > len(p) {
 			srv.pool.Put(i)
 			return 0, io.ErrShortBuffer
 		}
 
-		remote, err := srv.NewRemote(name, func(r *Remote) {
+		remote, err := srv.NewRemote(i, func(r *Remote) {
 			// When the remote is deleted, return its
 			// index to the pool.
 			srv.pool.Put(i)
@@ -79,6 +78,10 @@ func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
 		if err != nil {
 			log.Printf("error * restore failed (%d): %v", i, err)
 			continue
+		}
+		srv.pool.Got(restored.Index)
+		restored.Done = func(r *Remote) {
+			srv.pool.Put(r.Index)
 		}
 		remotes = append(remotes, restored)
 	}
@@ -112,3 +115,6 @@ func newIntPool() (p *intPool) {
 
 func (p *intPool) Get() int64  { return p.pool.Get().(int64) }
 func (p *intPool) Put(i int64) { p.pool.Put(i) }
+func (p *intPool) Got(i int64) {
+	// TODO: implement
+}
