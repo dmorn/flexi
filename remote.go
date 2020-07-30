@@ -7,6 +7,7 @@ package flexi
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,14 +43,8 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 	status("starting %v mount process", path)
 	defer status("mount @ %v completed", path)
 
-	task, err := DecodeTask(stdio.In)
-	if err != nil {
-		herr(err)
-		return
-	}
-	status("task %v decoded", task.ID)
-
-	rp, err := r.Spawn(ctx, task)
+	status("spawning remote process")
+	rp, p, err := r.Spawn(ctx, stdio.In)
 	if err != nil {
 		herr(err)
 		return
@@ -60,7 +55,7 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 	// process in case of error to avoid resource leaks.
 	oldherr := herr
 	herr = func(err error) {
-		r.Kill(ctx, rp)
+		r.Kill(ctx, p)
 		oldherr(err)
 		return
 	}
@@ -93,7 +88,7 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 	}
 	defer spawned.Close()
 
-	if err = EncodeRemoteProcess(spawned, rp); err != nil {
+	if _, err := io.Copy(spawned, p); err != nil {
 		herr(err)
 		return
 	}
