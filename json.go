@@ -35,14 +35,3 @@ func (h *JsonHelper) Err(w io.Writer, err error) {
 		Error: err.Error(),
 	})
 }
-
-func DecodeTask(r io.Reader) (task Task, err error) {
-	err = json.NewDecoder(r).Decode(&task)
-	return
-}
-
-func EncodeRemoteProcess(w io.Writer, rp *RemoteProcess) error {
-	// We want to know if an error happens encoding
-	// the remote process.
-	return json.NewEncoder(w).Encode(rp)
-}

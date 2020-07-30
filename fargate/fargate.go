@@ -5,8 +5,11 @@
 package fargate
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"time"
 
@@ -183,7 +186,11 @@ func eniFromTask(task *ecs.Task) (string, error) {
 	return eni, nil
 }
 
-func (f *Fargate) Spawn(ctx context.Context, t flexi.Task) (*flexi.RemoteProcess, error) {
+func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess, io.Reader, error) {
+	var t Task
+	if err := json.NewDecoder(r).Decode(&t); err != nil {
+		return nil, nil, fmt.Errorf("decoding task: %w", err)
+	}
 	task, err := f.RunTask(ctx, RunTaskInput{
 		Cluster:        t.Image.Cluster,
 		TaskDefinition: t.Image.Name,
@@ -191,30 +198,41 @@ func (f *Fargate) Spawn(ctx context.Context, t flexi.Task) (*flexi.RemoteProcess
 		SecurityGroups: t.Image.SecurityGroups,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if task, err = f.waitRunningTask(ctx, t.Image.Cluster, *task.TaskArn); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	eni, err := eniFromTask(task)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	ifi, err := describeNetworkInterface(ctx, f.lazySession(), eni)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &flexi.RemoteProcess{
-		Addr:    net.JoinHostPort(*ifi.Association.PublicIp, t.Image.Service),
-		Name:    *task.TaskArn,
+	addr := net.JoinHostPort(*ifi.Association.PublicIp, t.Image.Service)
+	name := *task.TaskArn
+
+	var b bytes.Buffer
+	if err := json.NewEncoder(&b).Encode(&Container{
+		Addr:    addr,
+		Name:    name,
 		Cluster: t.Image.Cluster,
-		Tags:    []string{"fargate", "9p"},
-	}, nil
+	}); err != nil {
+		return nil, nil, err
+	}
+
+	return &flexi.RemoteProcess{Addr: addr, Name: name}, &b, nil
 }
 
-func (f *Fargate) Kill(ctx context.Context, p *flexi.RemoteProcess) error {
+func (f *Fargate) Kill(ctx context.Context, r io.Reader) error {
+	var p Container
+	if err := json.NewDecoder(r).Decode(&p); err != nil {
+		return err
+	}
 	return f.StopTask(ctx, p.Cluster, p.Name)
 }
 
