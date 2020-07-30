@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"time"
 
 	"github.com/jecoz/flexi/file"
 	"github.com/jecoz/flexi/fs"
@@ -18,19 +20,27 @@ import (
 type Remote struct {
 	*file.Dir
 	Spawner
+	Index int64
 
 	Done func(*Remote)
 	mtpt string
 }
 
 func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+
 	h := &JsonHelper{}
 	herr := func(err error) {
 		h.Err(stdio.Err, err)
+		fmt.Fprintf(os.Stderr, err.Error()+"\n")
 	}
 	status := func(format string, args ...interface{}) {
+		fmt.Fprintf(os.Stderr, format+"\n", args...)
 		fmt.Fprintf(stdio.Status, format+"\n", args...)
 	}
+	status("starting %v mount process", path)
+	defer status("mount @ %v completed", path)
 
 	task, err := DecodeTask(stdio.In)
 	if err != nil {
@@ -71,6 +81,11 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 		return
 	}
 
+	status("storing spawn information at %v", path)
+
+	// TODO: try creating a version of this function that can
+	// detect when it is not possible to create the file in the
+	// remote namespace. This without leaking goroutines.
 	spawned, err := os.Create(filepath.Join(path, "spawned"))
 	if err != nil {
 		herr(err)
@@ -85,17 +100,18 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 	status("remote process info encoded & saved")
 }
 
-func NewRemote(mtpt, name string, s Spawner) (*Remote, error) {
+func NewRemote(mtpt string, index int64, s Spawner) (*Remote, error) {
 	// First check that the file is not present already.
 	// In that case, it means this remote should've been
 	// restored instead, or might be. Anyway it **might**
 	// not be treated as an error in the future.
+	name := strconv.Itoa(int(index))
 	path := filepath.Join(mtpt, name)
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		return nil, fmt.Errorf("remote exists already at %v", path)
 	}
 
-	r := &Remote{mtpt: mtpt, Spawner: s}
+	r := &Remote{mtpt: mtpt, Spawner: s, Index: index}
 	errfile := file.NewMulti("err")
 	statusfile := file.NewMulti("status")
 
@@ -113,8 +129,7 @@ func NewRemote(mtpt, name string, s Spawner) (*Remote, error) {
 		return true
 	})
 	static := []fs.File{spawn, errfile, statusfile}
-	r.Dir = file.NewDirLS(name, func() []fs.File {
-		return append(static, file.DiskLS(path)()...)
-	})
+	mirror := file.NewDirLS("mirror", file.DiskLS(path))
+	r.Dir = file.NewDirFiles(name, append(static, mirror)...)
 	return r, nil
 }
