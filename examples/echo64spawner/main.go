@@ -6,12 +6,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
-	"github.com/jecoz/flexi"
 	"github.com/jecoz/flexi/fargate"
 )
 
@@ -21,20 +20,14 @@ func exitf(format string, args ...interface{}) {
 }
 
 func main() {
-	var task flexi.Task
-	if err := json.NewDecoder(os.Stdin).Decode(&task); err != nil {
-		exitf("decode input task: %v", err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
 	defer cancel()
 
-	rp, err := new(fargate.Fargate).Spawn(ctx, task)
+	_, p, err := new(fargate.Fargate).Spawn(ctx, os.Stdin)
 	if err != nil {
 		exitf("spawn task: %v", err)
 	}
-
-	if err = json.NewEncoder(os.Stdout).Encode(rp); err != nil {
-		exitf("output encode: %v", err)
+	if _, err := io.Copy(os.Stdout, p); err != nil {
+		exitf("output copy: %v", err)
 	}
 }
