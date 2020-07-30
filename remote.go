@@ -34,10 +34,8 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 	h := &JsonHelper{}
 	herr := func(err error) {
 		h.Err(stdio.Err, err)
-		fmt.Fprintf(os.Stderr, err.Error()+"\n")
 	}
 	status := func(format string, args ...interface{}) {
-		fmt.Fprintf(os.Stderr, format+"\n", args...)
 		fmt.Fprintf(stdio.Status, format+"\n", args...)
 	}
 	status("starting %v mount process", path)
@@ -108,7 +106,7 @@ func NewRemote(mtpt string, index int64, s Spawner) (*Remote, error) {
 
 	r := &Remote{mtpt: mtpt, Spawner: s, Index: index}
 	errfile := file.NewMulti("err")
-	statusfile := file.NewMulti("status")
+	statusfile := file.NewMulti("state")
 
 	spawn := file.NewPlumber("spawn", func(p *file.Plumber) bool {
 		go func() {

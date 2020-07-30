@@ -50,7 +50,7 @@ func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
 		// Users read the clone file to obtain
 		// a new remote process.
 		i := srv.pool.Get()
-		s := []byte(strconv.FormatInt(i, 10))
+		s := []byte(strconv.FormatInt(i, 10)+"\n")
 		if len(s) > len(p) {
 			srv.pool.Put(i)
 			return 0, io.ErrShortBuffer
