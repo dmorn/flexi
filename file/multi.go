@@ -24,7 +24,7 @@ type Multi struct {
 	name string
 
 	sync.RWMutex
-	buf  *LimitBuffer
+	buf     *LimitBuffer
 	modTime time.Time
 }
 
