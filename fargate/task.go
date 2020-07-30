@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2020 jecoz
+//
+// SPDX-License-Identifier: BSD-3-Clause
+
 package fargate
 
 type Image struct {
