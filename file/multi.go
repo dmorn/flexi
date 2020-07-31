@@ -12,14 +12,6 @@ import (
 	"time"
 )
 
-// Multi is a fs.File implementation that broadcasts
-// whatever is written to it to all its Open readers.
-// Before Close is called, each Open call returns a stream
-// reader that never returs io.EOF buf rather blocks.
-// When Close is called, all readers are unlocked and will
-// eventually reach the end of the stream. After this point,
-// Open simply returns a buffer containing its contents.
-// Initialize it with NewMulti.
 type Multi struct {
 	name string
 
@@ -37,11 +29,6 @@ func (m *Multi) Write(p []byte) (int, error) {
 	return m.buf.Write(p)
 }
 
-// Close closes the output streams. Subsequent Read calls on the opened
-// streams will return io.EOF. Close stops if it is not capable of closing
-// a stream, but removes the writers that have been successfully closed.
-// Keeping on calling Close till nil is returned will eventually close
-// every stream.
 func (m *Multi) Close() error {
 	m.Lock()
 	defer m.Unlock()

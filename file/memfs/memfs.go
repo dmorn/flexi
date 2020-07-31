@@ -7,6 +7,7 @@ package memfs
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/jecoz/flexi/file"
@@ -77,11 +78,46 @@ func (mfs *MemFS) Create(path string, newfile fs.File) error {
 	if err != nil {
 		return err
 	}
-	dir, ok := f.(*file.Dir)
+	type hasAppend interface {
+		Append(fs.File)
+	}
+	dir, ok := f.(hasAppend)
 	if !ok {
 		return fmt.Errorf("%v is not a directory", path)
 	}
 	dir.Append(newfile)
+	return nil
+}
+
+func (mfs *MemFS) Remove(path string) error {
+	// First take the file and close it. This is the most
+	// critical aspect of remove, and it is what makes us
+	// avoid leaking resources. Remove the file from its
+	// holding directory later.
+	f, err := mfs.Open(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+
+	dirpath, _ := filepath.Split(path)
+	type hasRemove interface {
+		Remove(fs.File)
+	}
+	dirfile, err := mfs.Open(dirpath)
+	if err != nil {
+		return err
+	}
+	dir, ok := dirfile.(hasRemove)
+	if !ok {
+		return fmt.Errorf("could not delete file from directory %v", dirpath)
+	}
+	dir.Remove(f)
 	return nil
 }
 

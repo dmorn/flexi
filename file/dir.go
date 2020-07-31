@@ -31,6 +31,20 @@ func (d *Dir) LS() []fs.File {
 	return d.ls()
 }
 
+func (d *Dir) Close() error {
+	d.Lock()
+	defer d.Unlock()
+	for _, v := range d.ls() {
+		if err := v.Close(); err != nil {
+			return err
+		}
+	}
+	empty := []fs.File{}
+	d.ls = func() []fs.File {
+		return empty
+	}
+	return nil
+}
 func (d *Dir) Open() (io.ReadWriteCloser, error) { return &dirReader{Dir: d}, nil }
 func (d *Dir) Stat() (os.FileInfo, error) {
 	d.Lock()
@@ -69,6 +83,23 @@ func (d *Dir) Append(f fs.File) {
 	oldls := d.ls
 	d.ls = func() []fs.File {
 		return append(oldls(), f)
+	}
+}
+
+func (d *Dir) Remove(f fs.File) {
+	d.Lock()
+	defer d.Unlock()
+	d.modTime = time.Now()
+	oldls := d.ls
+	d.ls = func() []fs.File {
+		files := oldls()
+		filtered := make([]fs.File, 0, len(files))
+		for _, v := range files {
+			if v != f {
+				filtered = append(filtered, v)
+			}
+		}
+		return filtered
 	}
 }
 

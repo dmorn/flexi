@@ -20,12 +20,17 @@ type Srv struct {
 
 func (srv *Srv) handleRequest(t styx.Request) {
 	switch msg := t.(type) {
+	case styx.Tremove:
+		msg.Rremove(srv.FS.Remove(msg.Path()))
+		return
 	case styx.Ttruncate:
 		// TODO: implement if needed
 		msg.Rtruncate(nil)
+		return
 	case styx.Tutimes:
 		// TODO: implement if needed
 		msg.Rutimes(nil)
+		return
 	case styx.Tcreate:
 		b := file.NewBucket(msg.Name, msg.Mode, 2048)
 		if err := srv.FS.Create(msg.Path(), b); err != nil {
@@ -33,6 +38,7 @@ func (srv *Srv) handleRequest(t styx.Request) {
 			return
 		}
 		msg.Rcreate(b.Open())
+		return
 	case styx.Topen, styx.Twalk, styx.Tstat:
 		// All these messages require an open first.
 		// We're taking care of it in a single place.

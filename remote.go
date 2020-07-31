@@ -5,6 +5,7 @@
 package flexi
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -23,8 +24,31 @@ type Remote struct {
 	Spawner
 	Index int64
 
-	Done func(*Remote)
-	mtpt string
+	Done    func(*Remote)
+	mtpt    string
+	spawned io.Reader
+}
+
+func (r *Remote) Close() error {
+	if r.spawned != nil {
+		// TODO: OS dependent!
+		mtpt := filepath.Join(r.mtpt, strconv.Itoa(int(r.Index)))
+		cmd := exec.Command("umount", mtpt)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("unable to umount %v: %w", mtpt, err)
+		}
+
+		if err := r.Kill(context.Background(), r.spawned); err != nil {
+			// TODO: we will not be able to mount
+			// the remote process anymore.
+			return fmt.Errorf("critical: %w", err)
+		}
+	}
+	if err := r.Dir.Close(); err != nil {
+		return fmt.Errorf("critical: %w", err)
+	}
+	r.Done(r)
+	return nil
 }
 
 func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
@@ -86,10 +110,13 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 	}
 	defer spawned.Close()
 
-	if _, err := io.Copy(spawned, p); err != nil {
+	var b bytes.Buffer
+	tee := io.TeeReader(p, &b)
+	if _, err := io.Copy(spawned, tee); err != nil {
 		herr(err)
 		return
 	}
+	r.spawned = &b
 	status("remote process info encoded & saved")
 }
 

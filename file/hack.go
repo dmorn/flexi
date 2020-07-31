@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -37,15 +38,30 @@ func (h *HackableRWC) Write(p []byte) (int, error) {
 func (h *HackableRWC) Close() error { return nil }
 
 type HackableRead struct {
-	Name    string
+	Name string
+
+	sync.Mutex
 	ModTime time.Time
 	ReadAlt func([]byte) (int, error)
 }
 
+func (h *HackableRead) Close() error {
+	h.Lock()
+	defer h.Unlock()
+	h.ReadAlt = func([]byte) (int, error) {
+		return 0, io.EOF
+	}
+	h.ModTime = time.Now()
+	return nil
+}
 func (h *HackableRead) Open() (io.ReadWriteCloser, error) {
+	h.Lock()
+	defer h.Unlock()
 	var lastErr error
 	return &HackableRWC{
 		ReadAlt: func(p []byte) (int, error) {
+			h.Lock()
+			defer h.Unlock()
 			switch {
 			case errors.Is(lastErr, io.EOF):
 				return 0, lastErr
@@ -57,6 +73,7 @@ func (h *HackableRead) Open() (io.ReadWriteCloser, error) {
 			default:
 			}
 
+			h.ModTime = time.Now()
 			n, err := h.ReadAlt(p)
 			lastErr = err
 			return n, err
@@ -64,6 +81,8 @@ func (h *HackableRead) Open() (io.ReadWriteCloser, error) {
 	}, nil
 }
 func (h *HackableRead) Stat() (os.FileInfo, error) {
+	h.Lock()
+	defer h.Unlock()
 	return Info{
 		name:    h.Name,
 		size:    0,
