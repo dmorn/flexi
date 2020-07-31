@@ -43,10 +43,11 @@ func (r *Remote) Close() error {
 			// the remote process anymore.
 			return fmt.Errorf("critical: %w", err)
 		}
+		if err := os.RemoveAll(mtpt); err != nil {
+			return fmt.Errorf("critical: %w", err)
+		}
 	}
-	if err := r.Dir.Close(); err != nil {
-		return fmt.Errorf("critical: %w", err)
-	}
+	r.Dir = file.NewDirFiles("")
 	r.Done(r)
 	return nil
 }
