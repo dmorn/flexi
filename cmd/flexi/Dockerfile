@@ -2,9 +2,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-FROM golang:alpine AS builder
+FROM golang:1.14.6-buster AS builder
 
-# Set necessary environmet variables needed for our image
 ENV GO111MODULE=on CGO_ENABLED=0
 
 # Move to working directory /build
@@ -28,7 +27,11 @@ WORKDIR /dist
 RUN cp /build/main .
 
 # Build a small image
-FROM scratch
+FROM danielmorandini/9image:stable
+
+RUN apt-get update \
+    && apt-get install -y ca-certificates fuse \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /dist/main /
 
