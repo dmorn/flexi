@@ -31,10 +31,8 @@ type Remote struct {
 
 func (r *Remote) Close() error {
 	if r.spawned != nil {
-		// TODO: OS dependent!
 		mtpt := filepath.Join(r.mtpt, strconv.Itoa(int(r.Index)))
-		cmd := exec.Command("umount", mtpt)
-		if err := cmd.Run(); err != nil {
+		if err := Umount(mtpt); err != nil {
 			return fmt.Errorf("unable to umount %v: %w", mtpt, err)
 		}
 
@@ -52,8 +50,16 @@ func (r *Remote) Close() error {
 	return nil
 }
 
+func Mount(addr, mtpt string) error {
+	return mount(addr, mtpt)
+}
+
+func Umount(path string) error {
+	return umount(path)
+}
+
 func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
 	h := &JsonHelper{}
@@ -80,12 +86,9 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 	herr = func(err error) {
 		r.Kill(ctx, p)
 		oldherr(err)
-		return
 	}
 
-	// TODO: OS dependent!
-	cmd := exec.CommandContext(ctx, "9", "mount", rp.Addr, path)
-	if err := cmd.Run(); err != nil {
+	if err := Mount(rp.Addr, path); err != nil {
 		herr(err)
 		return
 	}
@@ -96,7 +99,6 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 		exec.CommandContext(ctx, "umount", path).Run()
 		os.RemoveAll(path)
 		oldherr(err)
-		return
 	}
 
 	status("storing spawn information at %v", path)
