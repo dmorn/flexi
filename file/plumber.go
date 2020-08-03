@@ -57,8 +57,7 @@ func (p *Plumber) Close() error {
 	defer p.Unlock()
 
 	if p.plumbed {
-		// Plumbed already, see Write.
-		return errors.New("plumbed already")
+		return nil
 	}
 	if err := p.buf.Close(); err != nil {
 		return err
