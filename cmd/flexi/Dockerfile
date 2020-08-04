@@ -27,7 +27,7 @@ WORKDIR /dist
 RUN cp /build/main .
 
 # Build a small image
-FROM danielmorandini/9image:stable
+FROM jecoz/9image
 
 RUN apt-get update \
     && apt-get install -y ca-certificates fuse \
