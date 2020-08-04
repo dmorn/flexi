@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/jecoz/flexi/file"
@@ -22,28 +21,27 @@ import (
 type Remote struct {
 	*file.Dir
 	Spawner
-	Index int64
+	Name string
+	Done func()
 
-	Done    func(*Remote)
 	mtpt    string
 	spawned io.Reader
 }
 
 func (r *Remote) Close() error {
 	if r.spawned != nil {
-		mtpt := filepath.Join(r.mtpt, strconv.Itoa(int(r.Index)))
+		mtpt := filepath.Join(r.mtpt, r.Name)
 		if err := Umount(mtpt); err != nil {
 			return fmt.Errorf("unable to umount %v: %w", mtpt, err)
 		}
 		if err := r.Kill(context.Background(), r.spawned); err != nil {
 			return err
 		}
-		if err := os.RemoveAll(mtpt); err != nil {
-			return err
-		}
 	}
 	r.Dir = file.NewDirFiles("")
-	r.Done(r)
+	if r.Done != nil {
+		r.Done()
+	}
 	return nil
 }
 
@@ -52,10 +50,13 @@ func Mount(addr, mtpt string) error {
 }
 
 func Umount(path string) error {
-	return umount(path)
+	if err := umount(path); err != nil {
+		return err
+	}
+	return os.RemoveAll(path)
 }
 
-func (r *Remote) mount(ctx context.Context, path string, i *Stdio) {
+func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
@@ -70,7 +71,7 @@ func (r *Remote) mount(ctx context.Context, path string, i *Stdio) {
 
 	h.Progress(1, "starting %v mount process", path)
 	h.Progress(2, "spawning remote process")
-	rp, p, err := r.Spawn(ctx, i.In)
+	rp, err := r.Spawn(ctx, i.In)
 	if err != nil {
 		herr(err)
 		return
@@ -81,7 +82,7 @@ func (r *Remote) mount(ctx context.Context, path string, i *Stdio) {
 	// process in case of error to avoid resource leaks.
 	oldherr := herr
 	herr = func(err error) {
-		r.Kill(ctx, p)
+		r.Kill(ctx, rp.Spawned)
 		oldherr(err)
 	}
 
@@ -110,8 +111,12 @@ func (r *Remote) mount(ctx context.Context, path string, i *Stdio) {
 	}
 	defer spawned.Close()
 
+	// If we read straight from rp.Spawned we'll consume its contents.
+	// This way we read inside b (which we use internally) and
+	// inside the spawned file.
+
 	var b bytes.Buffer
-	tee := io.TeeReader(p, &b)
+	tee := io.TeeReader(rp.Spawned, &b)
 	if _, err := io.Copy(spawned, tee); err != nil {
 		herr(err)
 		return
@@ -120,18 +125,41 @@ func (r *Remote) mount(ctx context.Context, path string, i *Stdio) {
 	h.Progress(6, "remote process info encoded & saved")
 }
 
-func NewRemote(mtpt string, index int64, s Spawner) (*Remote, error) {
+func RestoreRemote(mtpt string, name string, s Spawner, rp *RemoteProcess) (*Remote, error) {
+	// In contrast with NewRemote, we're not killing anything
+	// here even though we could.
+	path := filepath.Join(mtpt, name)
+	if err := Mount(rp.Addr, path); err != nil {
+		return nil, err
+	}
+
+	// We assume we're restoring a spawned remote. If
+	// that is the case, there is no need for creating
+	// the err, state and spawn files, as they belong
+	// to the past. If this wasn't a spawned remote,
+	// users should just delete this and create a new one.
+
+	mirror := file.NewDirLS("mirror", file.DiskLS(path))
+	return &Remote{
+		mtpt:    mtpt,
+		Spawner: s,
+		Name:    name,
+		Dir:     file.NewDirFiles(name, mirror),
+		spawned: rp.Spawned,
+	}, nil
+}
+
+func NewRemote(mtpt string, name string, s Spawner) (*Remote, error) {
 	// First check that the file is not present already.
 	// In that case, it means this remote should've been
 	// restored instead, or might be. Anyway it **might**
 	// not be treated as an error in the future.
-	name := strconv.Itoa(int(index))
 	path := filepath.Join(mtpt, name)
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		return nil, fmt.Errorf("remote exists already at %v", path)
 	}
 
-	r := &Remote{mtpt: mtpt, Spawner: s, Index: index}
+	r := &Remote{mtpt: mtpt, Spawner: s, Name: name}
 	errfile := file.NewMulti("err")
 	statefile := file.NewMulti("state")
 
@@ -140,7 +168,7 @@ func NewRemote(mtpt string, index int64, s Spawner) (*Remote, error) {
 			defer errfile.Close()
 			defer statefile.Close()
 
-			r.mount(context.Background(), path, &Stdio{
+			r.mirrorRemoteProcess(context.Background(), path, &Stdio{
 				In:    p,
 				Err:   errfile,
 				State: statefile,

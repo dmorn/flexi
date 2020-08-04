@@ -186,10 +186,10 @@ func eniFromTask(task *ecs.Task) (string, error) {
 	return eni, nil
 }
 
-func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess, io.Reader, error) {
+func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess, error) {
 	var t Task
 	if err := json.NewDecoder(r).Decode(&t); err != nil {
-		return nil, nil, fmt.Errorf("decoding task: %w", err)
+		return nil, fmt.Errorf("decoding task: %w", err)
 	}
 	task, err := f.RunTask(ctx, RunTaskInput{
 		Cluster:        t.Image.Cluster,
@@ -198,19 +198,19 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess,
 		SecurityGroups: t.Image.SecurityGroups,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if task, err = f.waitRunningTask(ctx, t.Image.Cluster, *task.TaskArn); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	eni, err := eniFromTask(task)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	ifi, err := describeNetworkInterface(ctx, f.lazySession(), eni)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	addr := net.JoinHostPort(*ifi.Association.PublicIp, t.Image.Service)
@@ -222,10 +222,10 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess,
 		Name:    name,
 		Cluster: t.Image.Cluster,
 	}); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return &flexi.RemoteProcess{Addr: addr, Name: name}, &b, nil
+	return &flexi.RemoteProcess{Addr: addr, Name: name, Spawned: &b}, nil
 }
 
 func (f *Fargate) Kill(ctx context.Context, r io.Reader) error {
@@ -234,6 +234,11 @@ func (f *Fargate) Kill(ctx context.Context, r io.Reader) error {
 		return err
 	}
 	return f.StopTask(ctx, p.Cluster, p.Name)
+}
+
+func (f *Fargate) LS() []*flexi.RemoteProcess {
+	// TODO: implement!
+	return []*flexi.RemoteProcess{}
 }
 
 func stringPtrSlice(s []string) []*string {

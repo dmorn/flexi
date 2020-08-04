@@ -5,10 +5,11 @@
 package flexi
 
 import (
-	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"path/filepath"
 	"strconv"
 	"sync"
 
@@ -31,47 +32,58 @@ func (s *Srv) Serve() error {
 	return styx.Serve(s.Ln, s.FS)
 }
 
-func (s *Srv) NewRemote(index int64, done func(*Remote)) (r *Remote, err error) {
-	r, err = NewRemote(s.Mtpt, index, s.Spawner)
+func (s *Srv) addRemote(f func(string) (*Remote, error)) (r *Remote, err error) {
+	index := s.pool.Get()
+	r, err = f(strconv.Itoa(int(index)))
 	if err != nil {
-		return
+		s.pool.Put(index)
 	}
-	r.Done = done
+	r.Done = func() {
+		s.pool.Put(index)
+	}
 	return
 }
 
-func (s *Srv) RestoreRemote(f fs.File) (*Remote, error) {
-	return nil, errors.New("restore remote: not implemented yet")
+func (s *Srv) NewRemote() (*Remote, error) {
+	return s.addRemote(func(name string) (*Remote, error) {
+		return NewRemote(s.Mtpt, name, s.Spawner)
+
+	})
+}
+
+func (s *Srv) RestoreRemote(rp *RemoteProcess) (*Remote, error) {
+	return s.addRemote(func(name string) (*Remote, error) {
+		return RestoreRemote(s.Mtpt, name, s.Spawner, rp)
+	})
+}
+
+func (s *Srv) cleanupMtpt() error {
+	for i, v := range file.DiskLS(s.Mtpt)() {
+		info, err := v.Stat()
+		if err != nil {
+			return fmt.Errorf("clean-up mtpt (%d): %v", i, err)
+		}
+		path := filepath.Join(s.Mtpt, info.Name())
+		if err = Umount(path); err != nil {
+			return fmt.Errorf("clean-up mtpt (%d): %v", i, err)
+		}
+	}
+	return nil
 }
 
 func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
 	srv := &Srv{Mtpt: mtpt, Ln: ln, Spawner: s, pool: newIntPool()}
-	clone := file.WithRead("clone", func(p []byte) (int, error) {
-		// Users read the clone file to obtain
-		// a new remote process.
-		i := srv.pool.Get()
-		s := []byte(strconv.FormatInt(i, 10) + "\n")
-		if len(s) > len(p) {
-			srv.pool.Put(i)
-			return 0, io.ErrShortBuffer
-		}
 
-		remote, err := srv.NewRemote(i, func(r *Remote) {
-			// When the remote is deleted, return its
-			// index to the pool.
-			srv.pool.Put(i)
-		})
-		if err != nil {
-			srv.pool.Put(i)
-			return 0, err
-		}
+	// Start from a clean state, otherwise we could encounter
+	// issues later on.
+	if err := srv.cleanupMtpt(); err != nil {
+		return err
+	}
 
-		srv.FS.Create("", remote)
-		return copy(p, s), io.EOF
-	})
-	// Restore previous list of remotes found in mtpt.
-	// Each remote, when spawned
-	oldremotes := file.DiskLS(mtpt)()
+	// Now retrieve remote processes that are still
+	// running and try mounting them back.
+
+	oldremotes := s.LS()
 	remotes := make([]*Remote, 0, len(oldremotes))
 	for i, v := range oldremotes {
 		restored, err := srv.RestoreRemote(v)
@@ -79,14 +91,27 @@ func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
 			log.Printf("error * restore failed (%d): %v", i, err)
 			continue
 		}
-		srv.pool.Got(restored.Index)
-		restored.Done = func(r *Remote) {
-			srv.pool.Put(r.Index)
-		}
 		remotes = append(remotes, restored)
 	}
 	log.Printf("*** %d remotes restored from %v", len(remotes), mtpt)
 
+	clone := file.WithRead("clone", func(p []byte) (int, error) {
+		// Users read the clone file to obtain
+		// a new remote process.
+		remote, err := srv.NewRemote()
+		if err != nil {
+			return 0, err
+		}
+
+		s := []byte(remote.Name + "\n")
+		if len(s) > len(p) {
+			remote.Done()
+			return 0, io.ErrShortBuffer
+		}
+
+		srv.FS.Create("", remote)
+		return copy(p, s), io.EOF
+	})
 	files := append(make([]fs.File, 0, len(remotes)+1), clone)
 	for _, v := range remotes {
 		files = append(files, v)
@@ -115,6 +140,3 @@ func newIntPool() (p *intPool) {
 
 func (p *intPool) Get() int64  { return p.pool.Get().(int64) }
 func (p *intPool) Put(i int64) { p.pool.Put(i) }
-func (p *intPool) Got(i int64) {
-	// TODO: implement
-}
