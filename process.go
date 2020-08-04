@@ -80,7 +80,7 @@ func ServeProcess(ln net.Listener, r Processor) error {
 		return true
 	})
 
-	root := file.NewDirFiles("", ctl, err, retv)
+	root := file.NewDirFiles("", ctl, err, retv, state)
 	p := Process{
 		FS:     memfs.New(root),
 		Ln:     ln,
