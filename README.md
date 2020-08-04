@@ -10,5 +10,30 @@ SPDX-License-Identifier: BSD-3-Clause
 [![GoDoc](https://godoc.org/github.com/jecoz/flexi?status.svg)](https://godoc.org/github.com/jecoz/flexi)
 [![asciicast](https://asciinema.org/a/345847.svg)](https://asciinema.org/a/345847)
 
-### how-to run in docker
-`docker run -p 564:564 --env-file docker.env --privileged jecoz/flexi`
+### docker session
+on one terminal:
+```
+% docker run -p 564:564 --env-file docker.env --privileged jecoz/flexi
+```
+on another one:
+```
+% 9 mount localhost:9pfs mnt
+% cat mnt/clone
+0
+% cat testdata/input.1.json > mnt/0/spawn
+% cat mnt/0/state
+0.14285714285714285,starting mnt/0 mount process
+0.2857142857142857,spawning remote process
+0.42857142857142855,remote process spawned @ 3.249.96.176:564
+0.5714285714285714,remote process mounted @ mnt/0
+0.7142857142857143,storing spawn information at mnt/0
+0.8571428571428571,remote process info encoded & saved
+1,done!
+% echo brother is your turn > mnt/0/mirror/ctl
+% cat mnt/0/mirror/state
+0.3333333333333333,buffering input payload
+0.6666666666666666,base64 encoding 21 bytes
+1,done!
+ % cat mnt/0/mirror/retv
+{"original":"brother is your turn\n","base64":"YnJvdGhlciBpcyB5b3VyIHR1cm4K"}
+```
