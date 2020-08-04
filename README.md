@@ -11,4 +11,4 @@ SPDX-License-Identifier: BSD-3-Clause
 [![asciicast](https://asciinema.org/a/345847.svg)](https://asciinema.org/a/345847)
 
 ### how-to run in docker
-`docker run -p 564:564 --env-file docker.env --privileged flexi`
+`docker run -p 564:564 --env-file docker.env --privileged jecoz/flexi`
