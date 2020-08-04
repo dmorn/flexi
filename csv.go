@@ -6,8 +6,8 @@ package flexi
 
 import (
 	"encoding/csv"
-	"strconv"
 	"io"
+	"strconv"
 )
 
 type CSVProgressHelper struct {
@@ -38,7 +38,7 @@ func (h *CSVProgressHelper) SilentEncode(v ...string) {
 }
 
 func (h *CSVProgressHelper) Progress(step int, description string) {
-	p := float64(step)/h.Tot
+	p := float64(step) / h.Tot
 	h.SilentEncode(strconv.FormatFloat(p, 'f', -1, 64), description)
 }
 

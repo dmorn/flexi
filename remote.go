@@ -146,8 +146,8 @@ func NewRemote(mtpt string, index int64, s Spawner) (*Remote, error) {
 			defer statefile.Close()
 
 			r.mount(context.Background(), path, &Stdio{
-				In:     p,
-				Err:    errfile,
+				In:    p,
+				Err:   errfile,
 				State: statefile,
 			})
 		}()
