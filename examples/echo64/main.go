@@ -38,24 +38,26 @@ func main() {
 	}()
 
 	if err := flexi.ServeProcess(ln, flexi.ProcessorFunc(func(i *flexi.Stdio) {
-		h := &flexi.JsonHelper{}
+		h := flexi.NewProcessHelper(i, 3)
+		defer h.Done()
+
+		h.Progress(1, "buffering input payload")
 		b := new(bytes.Buffer)
 		if _, err := io.Copy(b, i.In); err != nil {
-			h.Err(i.Err, fmt.Errorf("copy: %w", err))
+			h.Err(fmt.Errorf("copy: %w", err))
 			return
 		}
+
+		h.Progress(2, "base64 encoding %v bytes", b.Len())
 		encoded := base64.StdEncoding.EncodeToString(b.Bytes())
 
-		if err := h.Encode(i.Retv, &struct {
+		h.Retv(&struct {
 			Original string `json:"original"`
 			Base64   string `json:"base64"`
 		}{
 			Original: b.String(),
 			Base64:   encoded,
-		}); err != nil {
-			h.Err(i.Err, fmt.Errorf("retv: %w", err))
-			return
-		}
+		})
 	})); err != nil {
 		log.Printf("server error * %v", err)
 	}

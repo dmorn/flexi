@@ -55,32 +55,27 @@ func Umount(path string) error {
 	return umount(path)
 }
 
-func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
+func (r *Remote) mount(ctx context.Context, path string, i *Stdio) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
 	// Prepare output encoding helpers. If this is the behaviour
 	// of every flexi process, we could add one more helper layer.
 
-	h := &JSONHelper{}
+	h := NewProcessHelper(i, 7)
+	defer h.Done()
 	herr := func(err error) {
-		h.Err(stdio.Err, err)
-	}
-	ph := NewCSVProgressHelper(stdio.State, 7)
-	defer ph.Done()
-	progress := func(step int, format string, args ...interface{}) {
-		msg := fmt.Sprintf(format, args...)
-		ph.Progress(step, msg)
+		h.Err(err)
 	}
 
-	progress(1, "starting %v mount process", path)
-	progress(2, "spawning remote process")
-	rp, p, err := r.Spawn(ctx, stdio.In)
+	h.Progress(1, "starting %v mount process", path)
+	h.Progress(2, "spawning remote process")
+	rp, p, err := r.Spawn(ctx, i.In)
 	if err != nil {
 		herr(err)
 		return
 	}
-	progress(3, "remote process spawned @ %v", rp.Addr)
+	h.Progress(3, "remote process spawned @ %v", rp.Addr)
 
 	// From now on we also need to remove the spawned
 	// process in case of error to avoid resource leaks.
@@ -94,7 +89,7 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 		herr(err)
 		return
 	}
-	progress(4, "remote process mounted @ %v", path)
+	h.Progress(4, "remote process mounted @ %v", path)
 
 	oldherr = herr
 	herr = func(err error) {
@@ -103,7 +98,7 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 		oldherr(err)
 	}
 
-	progress(5, "storing spawn information at %v", path)
+	h.Progress(5, "storing spawn information at %v", path)
 
 	// TODO: try creating a version of this function that can
 	// detect when it is not possible to create the file in the
@@ -122,7 +117,7 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 		return
 	}
 	r.spawned = &b
-	progress(6, "remote process info encoded & saved")
+	h.Progress(6, "remote process info encoded & saved")
 }
 
 func NewRemote(mtpt string, index int64, s Spawner) (*Remote, error) {
