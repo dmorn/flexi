@@ -10,5 +10,5 @@ SPDX-License-Identifier: BSD-3-Clause
 [![GoDoc](https://godoc.org/github.com/jecoz/flexi?status.svg)](https://godoc.org/github.com/jecoz/flexi)
 [![asciicast](https://asciinema.org/a/345847.svg)](https://asciinema.org/a/345847)
 
-## Run with docker example
+### how-to run in docker
 `docker run -p 564:564 --env-file docker.env --privileged flexi`
