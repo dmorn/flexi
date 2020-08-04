@@ -25,7 +25,7 @@ type Stdio struct {
 	// Write here final output.
 	Retv io.WriteCloser
 	// Write here status updates.
-	Status io.WriteCloser
+	State io.WriteCloser
 }
 
 // Processor describes an entity that is capable of executing
@@ -54,6 +54,7 @@ func (p *Process) Serve() error {
 
 func ServeProcess(ln net.Listener, r Processor) error {
 	err := file.NewMulti("err")
+	state := file.NewMulti("state")
 	retv := file.NewMulti("retv")
 	ctl := file.NewPlumber("ctl", func(p *file.Plumber) bool {
 		buf := new(bytes.Buffer)
@@ -63,9 +64,10 @@ func ServeProcess(ln net.Listener, r Processor) error {
 
 		go func() {
 			stdio := &Stdio{
-				In:   buf,
-				Err:  err,
-				Retv: retv,
+				In:    buf,
+				Err:   err,
+				Retv:  retv,
+				State: state,
 			}
 			r.Run(stdio)
 			err.Close()

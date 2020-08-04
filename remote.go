@@ -35,14 +35,11 @@ func (r *Remote) Close() error {
 		if err := Umount(mtpt); err != nil {
 			return fmt.Errorf("unable to umount %v: %w", mtpt, err)
 		}
-
 		if err := r.Kill(context.Background(), r.spawned); err != nil {
-			// TODO: we will not be able to mount
-			// the remote process anymore.
-			return fmt.Errorf("critical: %w", err)
+			return err
 		}
 		if err := os.RemoveAll(mtpt); err != nil {
-			return fmt.Errorf("critical: %w", err)
+			return err
 		}
 	}
 	r.Dir = file.NewDirFiles("")
@@ -62,23 +59,28 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	h := &JsonHelper{}
+	// Prepare output encoding helpers. If this is the behaviour
+	// of every flexi process, we could add one more helper layer.
+
+	h := &JSONHelper{}
 	herr := func(err error) {
 		h.Err(stdio.Err, err)
 	}
-	status := func(format string, args ...interface{}) {
-		fmt.Fprintf(stdio.Status, format+"\n", args...)
+	ph := NewCSVProgressHelper(stdio.State, 7)
+	defer ph.Done()
+	progress := func(step int, format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		ph.Progress(step, msg)
 	}
-	status("starting %v mount process", path)
-	defer status("mount @ %v completed", path)
 
-	status("spawning remote process")
+	progress(1, "starting %v mount process", path)
+	progress(2, "spawning remote process")
 	rp, p, err := r.Spawn(ctx, stdio.In)
 	if err != nil {
 		herr(err)
 		return
 	}
-	status("remote process %v spawned @ %v", rp.Name, rp.Addr)
+	progress(3, "remote process spawned @ %v", rp.Addr)
 
 	// From now on we also need to remove the spawned
 	// process in case of error to avoid resource leaks.
@@ -92,7 +94,7 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 		herr(err)
 		return
 	}
-	status("remote process %v mounted @ %v", rp.Name, path)
+	progress(4, "remote process mounted @ %v", path)
 
 	oldherr = herr
 	herr = func(err error) {
@@ -101,7 +103,7 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 		oldherr(err)
 	}
 
-	status("storing spawn information at %v", path)
+	progress(5, "storing spawn information at %v", path)
 
 	// TODO: try creating a version of this function that can
 	// detect when it is not possible to create the file in the
@@ -120,7 +122,7 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 		return
 	}
 	r.spawned = &b
-	status("remote process info encoded & saved")
+	progress(6, "remote process info encoded & saved")
 }
 
 func NewRemote(mtpt string, index int64, s Spawner) (*Remote, error) {
@@ -136,22 +138,22 @@ func NewRemote(mtpt string, index int64, s Spawner) (*Remote, error) {
 
 	r := &Remote{mtpt: mtpt, Spawner: s, Index: index}
 	errfile := file.NewMulti("err")
-	statusfile := file.NewMulti("state")
+	statefile := file.NewMulti("state")
 
 	spawn := file.NewPlumber("spawn", func(p *file.Plumber) bool {
 		go func() {
 			defer errfile.Close()
-			defer statusfile.Close()
+			defer statefile.Close()
 
 			r.mount(context.Background(), path, &Stdio{
 				In:     p,
 				Err:    errfile,
-				Status: statusfile,
+				State: statefile,
 			})
 		}()
 		return true
 	})
-	static := []fs.File{spawn, errfile, statusfile}
+	static := []fs.File{spawn, errfile, statefile}
 	mirror := file.NewDirLS("mirror", file.DiskLS(path))
 	r.Dir = file.NewDirFiles(name, append(static, mirror)...)
 	return r, nil

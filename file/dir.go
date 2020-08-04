@@ -31,20 +31,7 @@ func (d *Dir) LS() []fs.File {
 	return d.ls()
 }
 
-func (d *Dir) Close() error {
-	d.Lock()
-	defer d.Unlock()
-	for _, v := range d.ls() {
-		if err := v.Close(); err != nil {
-			return err
-		}
-	}
-	empty := []fs.File{}
-	d.ls = func() []fs.File {
-		return empty
-	}
-	return nil
-}
+func (d *Dir) Close() error                      { return nil }
 func (d *Dir) Open() (io.ReadWriteCloser, error) { return &dirReader{Dir: d}, nil }
 func (d *Dir) Stat() (os.FileInfo, error) {
 	d.Lock()

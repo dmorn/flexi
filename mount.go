@@ -24,5 +24,5 @@ func mount(addr, mtpt string) error {
 }
 
 func umount(mtpt string) error {
-	return run("9", "umount", mtpt)
+	return run("umount", mtpt)
 }

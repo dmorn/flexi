@@ -9,26 +9,25 @@ import (
 	"io"
 )
 
-type JsonHelper struct {
+type JSONHelper struct {
 	// TODO: we could add an error handler delegate
 	// to cope with SilentEncode errors.
 }
 
-func (h *JsonHelper) SilentEncode(w io.Writer, v interface{}) {
+func (h *JSONHelper) SilentEncode(w io.Writer, v interface{}) {
 	if err := h.Encode(w, v); err != nil {
 		// TODO: panic-ing here is not a solution.
-		// I would rather prefer to get in touch with
-		// an Human.
+		// I would rather prefer to contact a human.
 		// Log? Email? Slack?
 		panic(err)
 	}
 }
 
-func (h *JsonHelper) Encode(w io.Writer, v interface{}) error {
+func (h *JSONHelper) Encode(w io.Writer, v interface{}) error {
 	return json.NewEncoder(w).Encode(v)
 }
 
-func (h *JsonHelper) Err(w io.Writer, err error) {
+func (h *JSONHelper) Err(w io.Writer, err error) {
 	h.SilentEncode(w, &struct {
 		Error string `json:"error"`
 	}{
