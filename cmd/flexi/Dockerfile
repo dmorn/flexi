@@ -6,36 +6,30 @@ FROM golang:1.14.6-buster AS builder
 
 ENV GO111MODULE=on CGO_ENABLED=0
 
-# Move to working directory /build
 WORKDIR /build
 
-# Copy and download dependency using go mod
 COPY go.mod .
 COPY go.sum .
 RUN go mod download
 
-# Copy the code into the container
+# Copy code into /build
 COPY . .
 
-# Build the application
-RUN go build -o main cmd/flexi/main.go
+RUN go build -o flexi cmd/flexi/main.go
 
-# Move to /dist directory as the place for resulting binary folder
 WORKDIR /dist
+RUN cp /build/flexi .
 
-# Copy binary from build to main folder
-RUN cp /build/main .
-
-# Build a small image
 FROM jecoz/9image
+WORKDIR /
 
 RUN apt-get update \
     && apt-get install -y ca-certificates fuse \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /dist/main /
+COPY --from=builder /dist/flexi /usr/bin
 
 EXPOSE 564
 
 # Command to run
-ENTRYPOINT ["/main", "-port", "564"]
+ENTRYPOINT ["flexi", "-port", "564", "-m", "mnt"]
