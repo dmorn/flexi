@@ -105,7 +105,7 @@ func (r *Remote) mount(ctx context.Context, path string, stdio *Stdio) {
 
 	// TODO: try creating a version of this function that can
 	// detect when it is not possible to create the file in the
-	// remote namespace. This without leaking goroutines.
+	// remote namespace w/o leaking goroutines nor locking.
 	spawned, err := os.Create(filepath.Join(path, "spawned"))
 	if err != nil {
 		herr(err)
