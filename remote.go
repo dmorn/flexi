@@ -20,7 +20,7 @@ import (
 
 type Remote struct {
 	*file.Dir
-	Spawner
+	S    Spawner
 	Name string
 	Done func()
 
@@ -34,7 +34,7 @@ func (r *Remote) Close() error {
 		if err := Umount(mtpt); err != nil {
 			return fmt.Errorf("unable to umount %v: %w", mtpt, err)
 		}
-		if err := r.Kill(context.Background(), r.spawned); err != nil {
+		if err := r.S.Kill(context.Background(), r.spawned); err != nil {
 			return err
 		}
 	}
@@ -71,7 +71,7 @@ func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio)
 
 	h.Progress(1, "starting %v mount process", path)
 	h.Progress(2, "spawning remote process")
-	rp, err := r.Spawn(ctx, i.In)
+	rp, err := r.S.Spawn(ctx, i.In)
 	if err != nil {
 		herr(err)
 		return
@@ -82,7 +82,7 @@ func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio)
 	// process in case of error to avoid resource leaks.
 	oldherr := herr
 	herr = func(err error) {
-		r.Kill(ctx, rp.Spawned)
+		r.S.Kill(ctx, rp.Spawned)
 		oldherr(err)
 	}
 
@@ -142,7 +142,7 @@ func RestoreRemote(mtpt string, name string, s Spawner, rp *RemoteProcess) (*Rem
 	mirror := file.NewDirLS("mirror", file.DiskLS(path))
 	return &Remote{
 		mtpt:    mtpt,
-		Spawner: s,
+		S:       s,
 		Name:    name,
 		Dir:     file.NewDirFiles(name, mirror),
 		spawned: rp.Spawned,
@@ -159,7 +159,7 @@ func NewRemote(mtpt string, name string, s Spawner) (*Remote, error) {
 		return nil, fmt.Errorf("remote exists already at %v", path)
 	}
 
-	r := &Remote{mtpt: mtpt, Spawner: s, Name: name}
+	r := &Remote{mtpt: mtpt, S: s, Name: name}
 	errfile := file.NewMulti("err")
 	statefile := file.NewMulti("state")
 	spawn := file.NewPlumber("spawn", func(p *file.Plumber) bool {

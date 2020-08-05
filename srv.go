@@ -22,8 +22,8 @@ import (
 type Srv struct {
 	Mtpt string
 	Ln   net.Listener
-	Spawner
-	FS fs.FS
+	S    Spawner
+	FS   fs.FS
 
 	pool *intPool
 }
@@ -32,28 +32,28 @@ func (s *Srv) Serve() error {
 	return styx.Serve(s.Ln, s.FS)
 }
 
-func (s *Srv) addRemote(f func(string) (*Remote, error)) (r *Remote, err error) {
+func (s *Srv) addRemote(f func(string) (*Remote, error)) (*Remote, error) {
 	index := s.pool.Get()
-	r, err = f(strconv.Itoa(int(index)))
+	r, err := f(strconv.Itoa(int(index)))
 	if err != nil {
 		s.pool.Put(index)
-		return
+		return nil, err
 	}
 	r.Done = func() {
 		s.pool.Put(index)
 	}
-	return
+	return r, nil
 }
 
 func (s *Srv) NewRemote() (*Remote, error) {
 	return s.addRemote(func(name string) (*Remote, error) {
-		return NewRemote(s.Mtpt, name, s.Spawner)
+		return NewRemote(s.Mtpt, name, s.S)
 	})
 }
 
 func (s *Srv) RestoreRemote(rp *RemoteProcess) (*Remote, error) {
 	return s.addRemote(func(name string) (*Remote, error) {
-		return RestoreRemote(s.Mtpt, name, s.Spawner, rp)
+		return RestoreRemote(s.Mtpt, name, s.S, rp)
 	})
 }
 
@@ -72,7 +72,7 @@ func (s *Srv) cleanupMtpt() error {
 }
 
 func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
-	srv := &Srv{Mtpt: mtpt, Ln: ln, Spawner: s, pool: newIntPool()}
+	srv := &Srv{Mtpt: mtpt, Ln: ln, S: s, pool: newIntPool()}
 
 	// Start from a clean state, otherwise we could encounter
 	// issues later on.

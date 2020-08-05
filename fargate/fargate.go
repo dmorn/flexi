@@ -11,9 +11,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -30,8 +30,8 @@ type Fargate struct {
 	// tasks. In case of a recovery, files can be retriven
 	// using LS.
 	BackupDir string
-	sess   *session.Session
-	client *ecs.ECS
+	sess      *session.Session
+	client    *ecs.ECS
 }
 
 func (f *Fargate) lazySession() *session.Session {
@@ -213,7 +213,9 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess,
 	// stop the task too.
 	undo := true
 	defer func() {
-		if !undo { return }
+		if !undo {
+			return
+		}
 		// Even though the original context was invalidated, we need to
 		// ensure we're not leaking resources.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
@@ -275,7 +277,7 @@ func (f *Fargate) Kill(ctx context.Context, r io.Reader) error {
 	if err := f.StopTask(ctx, p.Cluster, p.Name); err != nil {
 		return err
 	}
-	if err :=  f.RemoveBackup(p.Name); err != nil {
+	if err := f.RemoveBackup(p.Name); err != nil {
 		return fmt.Errorf("remove backup: %w", err)
 	}
 	return nil
@@ -298,8 +300,8 @@ func (f *Fargate) LS() ([]*flexi.RemoteProcess, error) {
 			return nil, fmt.Errorf("LS file %d: error unmarshaling file content: %w", err)
 		}
 		rp = append(rp, &flexi.RemoteProcess{
-			Name: container.Name,
-			Addr: container.Addr,
+			Name:    container.Name,
+			Addr:    container.Addr,
 			Spawned: &b,
 		})
 	}
