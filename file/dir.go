@@ -117,7 +117,7 @@ func DiskLS(path string) func() []fs.File {
 				}
 				continue
 			}
-			files[i] = NewRegular(path)
+			files[i] = NewRegular(path, v)
 		}
 		return files
 	}
