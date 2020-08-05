@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -64,7 +65,11 @@ func (s *Srv) cleanupMtpt() error {
 			return fmt.Errorf("clean-up mtpt (%d): %v", i, err)
 		}
 		path := filepath.Join(s.Mtpt, info.Name())
-		if err = Umount(path); err != nil {
+
+		// We do not care if the operation is not successfull.
+		// It might also be that there is nothing to umount.
+		umount(path)
+		if err = os.RemoveAll(path); err != nil {
 			return fmt.Errorf("clean-up mtpt (%d): %v", i, err)
 		}
 	}
