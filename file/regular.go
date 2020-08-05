@@ -11,10 +11,22 @@ import (
 
 type Regular struct {
 	path string
+	info os.FileInfo
 }
 
-func (r *Regular) Open() (io.ReadWriteCloser, error) { return os.Create(r.path) }
-func (r *Regular) Stat() (os.FileInfo, error)        { return os.Stat(r.path) }
-func (r *Regular) Close() error                      { return nil }
+func (r *Regular) Open() (io.ReadWriteCloser, error) {
+	return os.OpenFile(r.path, os.O_RDWR|os.O_CREATE, r.info.Mode())
+}
+func (r *Regular) Stat() (os.FileInfo, error) {
+	i, err := os.Stat(r.path)
+	if err != nil {
+		return nil, err
+	}
+	r.info = i
+	return i, nil
+}
+func (r *Regular) Close() error { return nil }
 
-func NewRegular(path string) *Regular { return &Regular{path} }
+func NewRegular(path string, i os.FileInfo) *Regular {
+	return &Regular{path: path, info: i}
+}
