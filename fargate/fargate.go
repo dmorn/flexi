@@ -240,7 +240,8 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess,
 	addr := net.JoinHostPort(*ifi.Association.PublicIp, t.Image.Service)
 	name := *task.TaskArn
 
-	bk, err := f.OpenBackup(name)
+	c := &Container{Addr: addr, Name: name, Cluster: t.Image.Cluster}
+	bk, err := f.CreateBackup(c)
 	if err != nil {
 		return nil, fmt.Errorf("open backup: %w", err)
 	}
@@ -249,11 +250,7 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess,
 	var b bytes.Buffer
 	w := io.MultiWriter(bk, &b)
 
-	if err := json.NewEncoder(w).Encode(&Container{
-		Addr:    addr,
-		Name:    name,
-		Cluster: t.Image.Cluster,
-	}); err != nil {
+	if err := json.NewEncoder(w).Encode(c); err != nil {
 		return nil, err
 	}
 
@@ -261,12 +258,15 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess,
 	return &flexi.RemoteProcess{Addr: addr, Name: name, Spawned: &b}, nil
 }
 
-func (f *Fargate) OpenBackup(arn string) (io.ReadWriteCloser, error) {
-	return os.Create(filepath.Join(f.BackupDir, arn))
+func (f *Fargate) CreateBackup(c *Container) (io.ReadWriteCloser, error) {
+	if err := os.MkdirAll(f.BackupDir, os.ModePerm); err != nil {
+		return nil, err
+	}
+	return os.Create(filepath.Join(f.BackupDir, c.Hash()))
 }
 
-func (f *Fargate) RemoveBackup(arn string) error {
-	return os.RemoveAll(filepath.Join(f.BackupDir, arn))
+func (f *Fargate) RemoveBackup(c *Container) error {
+	return os.RemoveAll(filepath.Join(f.BackupDir, c.Hash()))
 }
 
 func (f *Fargate) Kill(ctx context.Context, r io.Reader) error {
@@ -277,7 +277,7 @@ func (f *Fargate) Kill(ctx context.Context, r io.Reader) error {
 	if err := f.StopTask(ctx, p.Cluster, p.Name); err != nil {
 		return err
 	}
-	if err := f.RemoveBackup(p.Name); err != nil {
+	if err := f.RemoveBackup(&p); err != nil {
 		return fmt.Errorf("remove backup: %w", err)
 	}
 	return nil
@@ -295,9 +295,9 @@ func (f *Fargate) LS() ([]*flexi.RemoteProcess, error) {
 
 		var container Container
 		var b bytes.Buffer
-		tee := io.TeeReader(&b, rwc)
+		tee := io.TeeReader(rwc, &b)
 		if err := json.NewDecoder(tee).Decode(&container); err != nil {
-			return nil, fmt.Errorf("LS file %d: error unmarshaling file content: %w", err)
+			return nil, fmt.Errorf("LS file %d: %w", i, err)
 		}
 		rp = append(rp, &flexi.RemoteProcess{
 			Name:    container.Name,
