@@ -20,7 +20,7 @@ or, if you want to persist mounts across sessions (preferred way), create a Dock
 % docker run -p 564:564 --env-file docker.env --privileged --mount src=<desired volume name>,dst=/mnt jecoz/flexi
 ```
 
-on another one:
+on another terminal:
 ```
 % 9 mount localhost:9pfs mnt
 % cat mnt/clone
@@ -42,3 +42,6 @@ on another one:
  % cat mnt/0/mirror/retv
 {"original":"brother is your turn\n","base64":"YnJvdGhlciBpcyB5b3VyIHR1cm4K"}
 ```
+
+### Notes about deploying to AWS
+- flexi needs to be hosted in an environment that allows it to "mount", hence **not** Fargate but rather ECS with priviledged flag enabled.
