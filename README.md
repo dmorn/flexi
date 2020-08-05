@@ -15,6 +15,11 @@ on one terminal:
 ```
 % docker run -p 564:564 --env-file docker.env --privileged jecoz/flexi
 ```
+or, if you want to persist mounts across sessions (preferred way), create a Docker volume and issue
+```
+% docker run -p 564:564 --env-file docker.env --privileged --mount src=<desired volume name>,dst=/mnt jecoz/flexi
+```
+
 on another one:
 ```
 % 9 mount localhost:9pfs mnt
