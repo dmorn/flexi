@@ -131,11 +131,19 @@ func (h *ProcessHelper) Err(err error) {
 	}
 }
 
+func (h *ProcessHelper) Errf(format string, args ...interface{}) {
+	h.Err(fmt.Errorf(format, args...))
+}
+
 func (h *ProcessHelper) Retv(v interface{}) {
 	if err := json.NewEncoder(h.i.Retv).Encode(v); err != nil {
 		// Try telling the user about the error!
 		h.Err(err)
 	}
+}
+
+func (h *ProcessHelper) JSONDecodeInput(v interface{}) error {
+	return json.NewDecoder(h.i.In).Decode(v)
 }
 
 // Done writes the final "Done" message, indicating that the process
