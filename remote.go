@@ -162,7 +162,6 @@ func NewRemote(mtpt string, name string, s Spawner) (*Remote, error) {
 	r := &Remote{mtpt: mtpt, Spawner: s, Name: name}
 	errfile := file.NewMulti("err")
 	statefile := file.NewMulti("state")
-
 	spawn := file.NewPlumber("spawn", func(p *file.Plumber) bool {
 		go func() {
 			defer errfile.Close()

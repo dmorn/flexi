@@ -37,6 +37,7 @@ func (s *Srv) addRemote(f func(string) (*Remote, error)) (r *Remote, err error) 
 	r, err = f(strconv.Itoa(int(index)))
 	if err != nil {
 		s.pool.Put(index)
+		return
 	}
 	r.Done = func() {
 		s.pool.Put(index)
@@ -47,7 +48,6 @@ func (s *Srv) addRemote(f func(string) (*Remote, error)) (r *Remote, err error) 
 func (s *Srv) NewRemote() (*Remote, error) {
 	return s.addRemote(func(name string) (*Remote, error) {
 		return NewRemote(s.Mtpt, name, s.Spawner)
-
 	})
 }
 
@@ -83,7 +83,10 @@ func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
 	// Now retrieve remote processes that are still
 	// running and try mounting them back.
 
-	oldremotes := s.LS()
+	oldremotes, err := s.LS()
+	if err != nil {
+		return err
+	}
 	remotes := make([]*Remote, 0, len(oldremotes))
 	for i, v := range oldremotes {
 		restored, err := srv.RestoreRemote(v)

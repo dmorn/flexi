@@ -12,16 +12,24 @@ import (
 	"io"
 	"net"
 	"time"
+	"os"
+	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/jecoz/flexi"
+	"github.com/jecoz/flexi/file"
 )
 
 const LastStatusPollInterval = time.Millisecond * time.Duration(500)
 
 type Fargate struct {
+	// BackupDir is path pointing to the disk location where
+	// Fargate will store the information about the spawned
+	// tasks. In case of a recovery, files can be retriven
+	// using LS.
+	BackupDir string
 	sess   *session.Session
 	client *ecs.ECS
 }
@@ -200,6 +208,20 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess,
 	if err != nil {
 		return nil, err
 	}
+
+	// If an error occours from this point on, we need to
+	// stop the task too.
+	undo := true
+	defer func() {
+		if !undo { return }
+		// Even though the original context was invalidated, we need to
+		// ensure we're not leaking resources.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		f.StopTask(ctx, t.Image.Cluster, *task.TaskArn)
+	}()
+
 	if task, err = f.waitRunningTask(ctx, t.Image.Cluster, *task.TaskArn); err != nil {
 		return nil, err
 	}
@@ -216,8 +238,16 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess,
 	addr := net.JoinHostPort(*ifi.Association.PublicIp, t.Image.Service)
 	name := *task.TaskArn
 
+	bk, err := f.OpenBackup(name)
+	if err != nil {
+		return nil, fmt.Errorf("open backup: %w", err)
+	}
+	defer bk.Close()
+
 	var b bytes.Buffer
-	if err := json.NewEncoder(&b).Encode(&Container{
+	w := io.MultiWriter(bk, &b)
+
+	if err := json.NewEncoder(w).Encode(&Container{
 		Addr:    addr,
 		Name:    name,
 		Cluster: t.Image.Cluster,
@@ -225,7 +255,16 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess,
 		return nil, err
 	}
 
+	undo = false
 	return &flexi.RemoteProcess{Addr: addr, Name: name, Spawned: &b}, nil
+}
+
+func (f *Fargate) OpenBackup(arn string) (io.ReadWriteCloser, error) {
+	return os.Create(filepath.Join(f.BackupDir, arn))
+}
+
+func (f *Fargate) RemoveBackup(arn string) error {
+	return os.RemoveAll(filepath.Join(f.BackupDir, arn))
 }
 
 func (f *Fargate) Kill(ctx context.Context, r io.Reader) error {
@@ -233,12 +272,38 @@ func (f *Fargate) Kill(ctx context.Context, r io.Reader) error {
 	if err := json.NewDecoder(r).Decode(&p); err != nil {
 		return err
 	}
-	return f.StopTask(ctx, p.Cluster, p.Name)
+	if err := f.StopTask(ctx, p.Cluster, p.Name); err != nil {
+		return err
+	}
+	if err :=  f.RemoveBackup(p.Name); err != nil {
+		return fmt.Errorf("remove backup: %w", err)
+	}
+	return nil
 }
 
-func (f *Fargate) LS() []*flexi.RemoteProcess {
-	// TODO: implement!
-	return []*flexi.RemoteProcess{}
+func (f *Fargate) LS() ([]*flexi.RemoteProcess, error) {
+	files := file.DiskLS(f.BackupDir)()
+	rp := make([]*flexi.RemoteProcess, 0, len(files))
+	for i, v := range files {
+		rwc, err := v.Open()
+		if err != nil {
+			return nil, fmt.Errorf("LS file %d: open error: %w", i, err)
+		}
+		defer rwc.Close()
+
+		var container Container
+		var b bytes.Buffer
+		tee := io.TeeReader(&b, rwc)
+		if err := json.NewDecoder(tee).Decode(&container); err != nil {
+			return nil, fmt.Errorf("LS file %d: error unmarshaling file content: %w", err)
+		}
+		rp = append(rp, &flexi.RemoteProcess{
+			Name: container.Name,
+			Addr: container.Addr,
+			Spawned: &b,
+		})
+	}
+	return rp, nil
 }
 
 func stringPtrSlice(s []string) []*string {

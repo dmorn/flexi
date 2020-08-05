@@ -24,5 +24,5 @@ type RemoteProcess struct {
 type Spawner interface {
 	Spawn(context.Context, io.Reader) (*RemoteProcess, error)
 	Kill(context.Context, io.Reader) error
-	LS() []*RemoteProcess
+	LS() ([]*RemoteProcess, error)
 }

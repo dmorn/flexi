@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 
 	"github.com/jecoz/flexi"
 	"github.com/jecoz/flexi/fargate"
@@ -35,7 +36,10 @@ func main() {
 		ln.Close()
 	}()
 
-	if err := flexi.ServeFlexi(ln, *mtpt, new(fargate.Fargate)); err != nil {
+	n := filepath.Join(*mtpt, "n")
+	b := filepath.Join(*mtpt, "backup")
+	s := &fargate.Fargate{BackupDir: b}
+	if err := flexi.ServeFlexi(ln, n, s); err != nil {
 		log.Printf("flexi server error * %v", err)
 	}
 }
