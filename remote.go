@@ -82,7 +82,7 @@ func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio)
 	oldherr := herr
 	herr = func(format string, args ...interface{}) {
 		r.S.Kill(ctx, rp.Spawned)
-		oldherr(err)
+		oldherr(format, args...)
 	}
 
 	if err := Mount(rp.Addr, path); err != nil {
@@ -95,7 +95,7 @@ func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio)
 	herr = func(format string, args ...interface{}) {
 		exec.CommandContext(ctx, "umount", path).Run()
 		os.RemoveAll(path)
-		oldherr(err)
+		oldherr(format, args...)
 	}
 
 	h.Progress(4, "storing spawn information at %v", path)
