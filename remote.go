@@ -154,9 +154,10 @@ func NewRemote(mtpt string, name string, s Spawner, id int) (*Remote, error) {
 	// restored instead, or might be. Anyway it **might**
 	// not be treated as an error in the future.
 	path := filepath.Join(mtpt, name)
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
+	if len(file.DiskLS(path)()) > 0 {
 		return nil, fmt.Errorf("remote exists already at %v", path)
 	}
+	os.RemoveAll(path)
 
 	r := &Remote{mtpt: mtpt, S: s, Name: name}
 	errfile := file.NewMulti("err")
