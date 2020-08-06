@@ -1,0 +1,14 @@
+{
+    "caps": {},
+    "id": "",
+    "image": {
+        "cluster": "",
+        "name": "",
+        "security_groups": [
+        ],
+        "service": "564",
+        "subnets": [
+        ]
+    },
+    "image_type": "fargate"
+}
