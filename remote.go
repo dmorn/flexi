@@ -63,50 +63,49 @@ func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio)
 	// Prepare output encoding helpers. If this is the behaviour
 	// of every flexi process, we could add one more helper layer.
 
-	h := NewProcessHelper(i, 7)
+	h := NewProcessHelper(i, 6)
 	defer h.Done()
-	herr := func(err error) {
-		h.Err(err)
+	herr := func(format string, args ...interface{}) {
+		h.Errf(format, args...)
 	}
 
-	h.Progress(1, "starting %v mount process", path)
-	h.Progress(2, "spawning remote process")
+	h.Progress(1, "spawning remote process")
 	rp, err := r.S.Spawn(ctx, i.In)
 	if err != nil {
-		herr(err)
+		herr("spawn remote process: %w", err)
 		return
 	}
-	h.Progress(3, "remote process spawned @ %v", rp.Addr)
+	h.Progress(2, "remote process spawned @ %v", rp.Addr)
 
 	// From now on we also need to remove the spawned
 	// process in case of error to avoid resource leaks.
 	oldherr := herr
-	herr = func(err error) {
+	herr = func(format string, args ...interface{}) {
 		r.S.Kill(ctx, rp.Spawned)
 		oldherr(err)
 	}
 
 	if err := Mount(rp.Addr, path); err != nil {
-		herr(err)
+		herr("mount remote process: %w", err)
 		return
 	}
-	h.Progress(4, "remote process mounted @ %v", path)
+	h.Progress(3, "remote process mounted @ %v", path)
 
 	oldherr = herr
-	herr = func(err error) {
+	herr = func(format string, args ...interface{}) {
 		exec.CommandContext(ctx, "umount", path).Run()
 		os.RemoveAll(path)
 		oldherr(err)
 	}
 
-	h.Progress(5, "storing spawn information at %v", path)
+	h.Progress(4, "storing spawn information at %v", path)
 
 	// TODO: try creating a version of this function that can
 	// detect when it is not possible to create the file in the
 	// remote namespace w/o leaking goroutines nor locking.
 	spawned, err := os.Create(filepath.Join(path, "spawned"))
 	if err != nil {
-		herr(err)
+		herr("create back file: %w", err)
 		return
 	}
 	defer spawned.Close()
@@ -118,11 +117,11 @@ func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio)
 	var b bytes.Buffer
 	tee := io.TeeReader(rp.Spawned, &b)
 	if _, err := io.Copy(spawned, tee); err != nil {
-		herr(err)
+		herr("copying spawn information: %w", err)
 		return
 	}
 	r.spawned = &b
-	h.Progress(6, "remote process info encoded & saved")
+	h.Progress(5, "remote process info encoded & saved")
 }
 
 func RestoreRemote(mtpt string, name string, s Spawner, rp *RemoteProcess) (*Remote, error) {
