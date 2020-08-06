@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -26,34 +27,43 @@ type Srv struct {
 	S    Spawner
 	FS   fs.FS
 
-	pool *intPool
+	pool *idPool
 }
 
 func (s *Srv) Serve() error {
 	return styx.Serve(s.Ln, s.FS)
 }
 
-func (s *Srv) addRemote(f func(string) (*Remote, error)) (*Remote, error) {
-	index := s.pool.Get()
-	r, err := f(strconv.Itoa(int(index)))
+func (s *Srv) addRemote(id int, f func(string, int) (*Remote, error)) (*Remote, error) {
+	if id < 0 {
+		id = s.pool.Get()
+	} else {
+		// Notify the pool that we have this id
+		// already and no other Get() call should
+		// return id till we Put it back to the pool.
+		if err := s.pool.Have(id); err != nil {
+			return nil, fmt.Errorf("add remote: invalid id requested: %w", err)
+		}
+	}
+	r, err := f(strconv.Itoa(id), id)
 	if err != nil {
-		s.pool.Put(index)
+		s.pool.Put(id)
 		return nil, err
 	}
 	r.Done = func() {
-		s.pool.Put(index)
+		s.pool.Put(id)
 	}
 	return r, nil
 }
 
 func (s *Srv) NewRemote() (*Remote, error) {
-	return s.addRemote(func(name string) (*Remote, error) {
-		return NewRemote(s.Mtpt, name, s.S)
+	return s.addRemote(-1, func(name string, id int) (*Remote, error) {
+		return NewRemote(s.Mtpt, name, s.S, id)
 	})
 }
 
 func (s *Srv) RestoreRemote(rp *RemoteProcess) (*Remote, error) {
-	return s.addRemote(func(name string) (*Remote, error) {
+	return s.addRemote(rp.ID, func(name string, id int) (*Remote, error) {
 		return RestoreRemote(s.Mtpt, name, s.S, rp)
 	})
 }
@@ -77,7 +87,7 @@ func (s *Srv) cleanupMtpt() error {
 }
 
 func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
-	srv := &Srv{Mtpt: mtpt, Ln: ln, S: s, pool: newIntPool()}
+	srv := &Srv{Mtpt: mtpt, Ln: ln, S: s, pool: new(idPool)}
 
 	// Start from a clean state, otherwise we could encounter
 	// issues later on.
@@ -130,21 +140,80 @@ func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
 	return srv.Serve()
 }
 
-type intPool struct {
-	n    int64
-	pool sync.Pool
+type idPool struct {
+	sync.Mutex
+	free []int
+	out  []int
 }
 
-func newIntPool() (p *intPool) {
-	p = new(intPool)
-	p.pool = sync.Pool{
-		New: func() interface{} {
-			defer func() { p.n++ }()
-			return p.n
-		},
+// Get returns a unique integer. Subsequent Get calls will not
+// return the same integer unless it is returned to the pool
+// with Put.
+func (p *idPool) Get() int {
+	p.Lock()
+	defer p.Unlock()
+	if p.out == nil {
+		p.out = []int{}
 	}
-	return
+	if len(p.free) == 0 {
+		max := 0
+		if len(p.out) > 0 {
+			max = p.out[0]
+			max++
+		}
+		p.free = []int{max}
+	}
+
+	id := p.free[0]
+	p.free = p.free[1:]
+	p.out = append(p.out, id)
+	sort.Sort(sort.Reverse(sort.IntSlice(p.out)))
+	return id
 }
 
-func (p *intPool) Get() int64  { return p.pool.Get().(int64) }
-func (p *intPool) Put(i int64) { p.pool.Put(i) }
+// Put returns i to the pool, meaning that subsequent Get
+// calls might return it.
+func (p *idPool) Put(i int) {
+	p.Lock()
+	defer p.Unlock()
+
+	remove := -1
+	for j, v := range p.out {
+		if v == i {
+			remove = j
+			break
+		}
+	}
+	if remove == -1 {
+		// Caller asked to remove an indentifier
+		// that was not in the out list.
+		// Is it critical?
+		return
+	}
+	p.out = append(p.out[:remove], p.out[remove+1:]...)
+
+	if p.free == nil {
+		p.free = []int{}
+	}
+	p.free = append(p.free, i)
+	sort.Ints(p.free)
+}
+
+// Have works like Get without returning any integer.
+// Use it to let p know you have i, and no other should.
+// Returns an error if p knew already that i was out.
+func (p *idPool) Have(i int) error {
+	p.Lock()
+	defer p.Unlock()
+	if p.out == nil {
+		p.out = []int{}
+	}
+	for _, v := range p.out {
+		if i == v {
+			return fmt.Errorf("%d is already tracked by the pool", i)
+		}
+	}
+	p.out = append(p.out, i)
+	sort.Sort(sort.Reverse(sort.IntSlice(p.out)))
+	return nil
+}

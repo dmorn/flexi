@@ -194,7 +194,7 @@ func eniFromTask(task *ecs.Task) (string, error) {
 	return eni, nil
 }
 
-func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess, error) {
+func (f *Fargate) Spawn(ctx context.Context, r io.Reader, id int) (*flexi.RemoteProcess, error) {
 	var t Task
 	if err := json.NewDecoder(r).Decode(&t); err != nil {
 		return nil, fmt.Errorf("decoding task: %w", err)
@@ -241,21 +241,29 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader) (*flexi.RemoteProcess,
 	name := *task.TaskArn
 
 	c := &Container{Addr: addr, Name: name, Cluster: t.Image.Cluster}
+	var b bytes.Buffer
+	if err := json.NewEncoder(&b).Encode(c); err != nil {
+		return nil, err
+	}
+	rp := &flexi.RemoteProcess{
+		ID:      id,
+		Addr:    addr,
+		Name:    name,
+		Spawned: b.Bytes(),
+	}
+
 	bk, err := f.CreateBackup(c)
 	if err != nil {
-		return nil, fmt.Errorf("open backup: %w", err)
+		return nil, fmt.Errorf("create backup file: %w", err)
 	}
 	defer bk.Close()
 
-	var b bytes.Buffer
-	w := io.MultiWriter(bk, &b)
-
-	if err := json.NewEncoder(w).Encode(c); err != nil {
-		return nil, err
+	if err = json.NewEncoder(bk).Encode(rp); err != nil {
+		return nil, fmt.Errorf("encode remote process: %w", err)
 	}
 
 	undo = false
-	return &flexi.RemoteProcess{Addr: addr, Name: name, Spawned: &b}, nil
+	return rp, nil
 }
 
 func (f *Fargate) CreateBackup(c *Container) (io.ReadWriteCloser, error) {
@@ -293,17 +301,11 @@ func (f *Fargate) LS() ([]*flexi.RemoteProcess, error) {
 		}
 		defer rwc.Close()
 
-		var container Container
-		var b bytes.Buffer
-		tee := io.TeeReader(rwc, &b)
-		if err := json.NewDecoder(tee).Decode(&container); err != nil {
+		var r flexi.RemoteProcess
+		if err := json.NewDecoder(rwc).Decode(&r); err != nil {
 			return nil, fmt.Errorf("LS file %d: %w", i, err)
 		}
-		rp = append(rp, &flexi.RemoteProcess{
-			Name:    container.Name,
-			Addr:    container.Addr,
-			Spawned: &b,
-		})
+		rp = append(rp, &r)
 	}
 	return rp, nil
 }

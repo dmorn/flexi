@@ -5,24 +5,30 @@
 package flexi
 
 import (
+	"bytes"
 	"context"
 	"io"
 )
 
 type RemoteProcess struct {
-	Addr string
-	Name string
+	ID   int    `json:"id"`
+	Addr string `json:"addr"`
+	Name string `json:"name"`
 
 	// Spawned contains the payload that needs to be preserved
 	// in order to undo the Spawn operation. flexi does not
 	// know how to encode/decode it, so it just saves it
 	// inside files (in the remote fs itself and in a persistent
 	// storage)
-	Spawned io.Reader
+	Spawned []byte `json:"spawned"`
+}
+
+func (rp *RemoteProcess) SpawnedReader() io.Reader {
+	return bytes.NewReader(rp.Spawned)
 }
 
 type Spawner interface {
-	Spawn(context.Context, io.Reader) (*RemoteProcess, error)
+	Spawn(context.Context, io.Reader, int) (*RemoteProcess, error)
 	Kill(context.Context, io.Reader) error
 	LS() ([]*RemoteProcess, error)
 }

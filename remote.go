@@ -56,7 +56,7 @@ func Umount(path string) error {
 	return os.RemoveAll(path)
 }
 
-func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio) {
+func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio, id int) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
@@ -70,7 +70,7 @@ func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio)
 	}
 
 	h.Progress(1, "spawning remote process")
-	rp, err := r.S.Spawn(ctx, i.In)
+	rp, err := r.S.Spawn(ctx, i.In, id)
 	if err != nil {
 		herr("spawn remote process: %w", err)
 		return
@@ -81,7 +81,7 @@ func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio)
 	// process in case of error to avoid resource leaks.
 	oldherr := herr
 	herr = func(format string, args ...interface{}) {
-		r.S.Kill(ctx, rp.Spawned)
+		r.S.Kill(ctx, rp.SpawnedReader())
 		oldherr(format, args...)
 	}
 
@@ -115,7 +115,7 @@ func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio)
 	// inside the spawned file.
 
 	var b bytes.Buffer
-	tee := io.TeeReader(rp.Spawned, &b)
+	tee := io.TeeReader(rp.SpawnedReader(), &b)
 	if _, err := io.Copy(spawned, tee); err != nil {
 		herr("copying spawn information: %w", err)
 		return
@@ -144,11 +144,11 @@ func RestoreRemote(mtpt string, name string, s Spawner, rp *RemoteProcess) (*Rem
 		S:       s,
 		Name:    name,
 		Dir:     file.NewDirFiles(name, mirror),
-		spawned: rp.Spawned,
+		spawned: rp.SpawnedReader(),
 	}, nil
 }
 
-func NewRemote(mtpt string, name string, s Spawner) (*Remote, error) {
+func NewRemote(mtpt string, name string, s Spawner, id int) (*Remote, error) {
 	// First check that the file is not present already.
 	// In that case, it means this remote should've been
 	// restored instead, or might be. Anyway it **might**
@@ -170,7 +170,7 @@ func NewRemote(mtpt string, name string, s Spawner) (*Remote, error) {
 				In:    p,
 				Err:   errfile,
 				State: statefile,
-			})
+			}, id)
 		}()
 		return true
 	})
