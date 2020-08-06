@@ -31,7 +31,15 @@ func (d *Dir) LS() []fs.File {
 	return d.ls()
 }
 
-func (d *Dir) Close() error                      { return nil }
+func (d *Dir) Close() error {
+	d.Lock()
+	defer d.Unlock()
+	d.modTime = time.Now()
+	d.ls = func() []fs.File {
+		return []fs.File{}
+	}
+	return nil
+}
 func (d *Dir) Open() (io.ReadWriteCloser, error) { return &dirReader{Dir: d}, nil }
 func (d *Dir) Stat() (os.FileInfo, error) {
 	d.Lock()
