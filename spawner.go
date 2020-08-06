@@ -24,7 +24,9 @@ type RemoteProcess struct {
 }
 
 func (rp *RemoteProcess) SpawnedReader() io.Reader {
-	return bytes.NewReader(rp.Spawned)
+	b := make([]byte, 0, len(rp.Spawned))
+	copy(b, rp.Spawned)
+	return bytes.NewReader(b)
 }
 
 type Spawner interface {
