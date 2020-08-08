@@ -5,7 +5,6 @@
 package flexi
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -24,17 +23,17 @@ type Remote struct {
 	Name string
 	Done func()
 
-	mtpt    string
-	spawned io.Reader
+	mtpt string
+	proc *RemoteProcess
 }
 
 func (r *Remote) Close() error {
-	if r.spawned != nil {
+	if r.proc != nil {
 		mtpt := filepath.Join(r.mtpt, r.Name)
 		if err := Umount(mtpt); err != nil {
 			return fmt.Errorf("unable to umount %v: %w", mtpt, err)
 		}
-		if err := r.S.Kill(context.Background(), r.spawned); err != nil {
+		if err := r.S.Kill(context.Background(), r.proc.SpawnedReader()); err != nil {
 			return err
 		}
 	}
@@ -110,17 +109,11 @@ func (r *Remote) mirrorRemoteProcess(ctx context.Context, path string, i *Stdio,
 	}
 	defer spawned.Close()
 
-	// If we read straight from rp.Spawned we'll consume its contents.
-	// This way we read inside b (which we use internally) and
-	// inside the spawned file.
-
-	var b bytes.Buffer
-	tee := io.TeeReader(rp.SpawnedReader(), &b)
-	if _, err := io.Copy(spawned, tee); err != nil {
+	if _, err := io.Copy(spawned, rp.SpawnedReader()); err != nil {
 		herr("copying spawn information: %w", err)
 		return
 	}
-	r.spawned = &b
+	r.proc = rp
 	h.Progress(5, "remote process info encoded & saved")
 }
 
@@ -140,11 +133,11 @@ func RestoreRemote(mtpt string, name string, s Spawner, rp *RemoteProcess) (*Rem
 
 	mirror := file.NewDirLS("mirror", file.DiskLS(path))
 	return &Remote{
-		mtpt:    mtpt,
-		S:       s,
-		Name:    name,
-		Dir:     file.NewDirFiles(name, mirror),
-		spawned: rp.SpawnedReader(),
+		mtpt: mtpt,
+		S:    s,
+		Name: name,
+		Dir:  file.NewDirFiles(name, mirror),
+		proc: rp,
 	}, nil
 }
 
