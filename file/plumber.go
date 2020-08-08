@@ -22,9 +22,15 @@ type Plumber struct {
 	modTime time.Time
 }
 
-func (p *Plumber) Size() int64                       { return p.buf.Size() }
+func (p *Plumber) Size() int64 {
+	p.Lock()
+	defer p.Unlock()
+	return p.buf.Size()
+}
 func (p *Plumber) Open() (io.ReadWriteCloser, error) { return p, nil }
 func (p *Plumber) Stat() (os.FileInfo, error) {
+	p.Lock()
+	defer p.Unlock()
 	return Info{
 		name:    p.name,
 		size:    p.Size(),
@@ -35,6 +41,8 @@ func (p *Plumber) Stat() (os.FileInfo, error) {
 }
 
 func (p *Plumber) Read(b []byte) (int, error) {
+	p.Lock()
+	defer p.Unlock()
 	// Read is only called from the inside to obtain
 	// buffer's contents, usually only after Close
 	// is called (hence to writes occur).
