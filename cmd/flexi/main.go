@@ -38,7 +38,7 @@ func main() {
 
 	n := filepath.Join(*mtpt, "n")
 	b := filepath.Join(*mtpt, "backup")
-	s := &fargate.Fargate{BackupDir: b}
+	s := &fargate.Fargate{BackupDir: b, Backup: true}
 	if err := flexi.ServeFlexi(ln, n, s); err != nil {
 		log.Printf("flexi server error * %v", err)
 	}

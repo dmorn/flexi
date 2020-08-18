@@ -23,7 +23,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
 	defer cancel()
 
-	rp, err := new(fargate.Fargate).Spawn(ctx, os.Stdin, 0)
+	spawner := &fargate.Fargate{Backup: false}
+	rp, err := spawner.Spawn(ctx, os.Stdin, 0)
 	if err != nil {
 		exitf("spawn task: %v", err)
 	}

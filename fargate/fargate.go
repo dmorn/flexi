@@ -30,6 +30,7 @@ type Fargate struct {
 	// tasks. In case of a recovery, files can be retriven
 	// using LS.
 	BackupDir string
+	Backup bool
 	sess      *session.Session
 	client    *ecs.ECS
 }
@@ -250,6 +251,10 @@ func (f *Fargate) Spawn(ctx context.Context, r io.Reader, id int) (*flexi.Remote
 		Addr:    addr,
 		Name:    name,
 		Spawned: b.Bytes(),
+	}
+	if !f.Backup {
+		undo = false
+		return rp, nil
 	}
 
 	bk, err := f.CreateBackup(c)
