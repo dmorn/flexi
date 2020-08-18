@@ -40,7 +40,7 @@ func (d *Dir) Close() error {
 	}
 	return nil
 }
-func (d *Dir) Open() (io.ReadWriteCloser, error) { return &dirReader{Dir: d}, nil }
+func (d *Dir) Open() (io.ReadWriteCloser, error) { return &dirReader{dir: d}, nil }
 func (d *Dir) Stat() (os.FileInfo, error) {
 	d.Lock()
 	defer d.Unlock()
@@ -147,7 +147,7 @@ func NewDirFiles(name string, files ...fs.File) *Dir {
 }
 
 type dirReader struct {
-	*Dir
+	dir    *Dir
 	offset int
 }
 
@@ -158,12 +158,12 @@ func (d *dirReader) Write(p []byte) (int, error) { return 0, errNotSupported }
 func (d *dirReader) Close() error                { return nil }
 
 func (d *dirReader) Readdir(n int) ([]os.FileInfo, error) {
-	if d.Dir == nil {
+	if d.dir == nil {
 		return nil, os.ErrInvalid
 	}
-	d.Dir.Lock()
-	all := d.Dir.ls()
-	d.Dir.Unlock()
+	d.dir.Lock()
+	all := d.dir.ls()
+	d.dir.Unlock()
 
 	if d.offset >= len(all) {
 		return nil, io.EOF

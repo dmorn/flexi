@@ -33,7 +33,7 @@ func (p *Plumber) Stat() (os.FileInfo, error) {
 	defer p.Unlock()
 	return Info{
 		name:    p.name,
-		size:    p.Size(),
+		size:    p.buf.Size(),
 		mode:    0222,
 		modTime: p.modTime,
 		isDir:   false,
@@ -62,21 +62,26 @@ func (p *Plumber) Write(b []byte) (int, error) {
 
 func (p *Plumber) Close() error {
 	p.Lock()
-	defer p.Unlock()
 
 	if p.plumbed {
+		p.Unlock()
 		return nil
 	}
 	if err := p.buf.Close(); err != nil {
+		p.Unlock()
 		return err
 	}
 
 	// Plumb only if there is a plumbed function
 	// & the buffer contains some data.
 	if p.f == nil {
+		p.Unlock()
 		return nil
 	}
-	if p.buf.Size() > 0 {
+	p.Unlock()
+
+	// Note that from this point on the p is unlocked.
+	if p.Size() > 0 {
 		p.plumbed = p.f(p)
 	}
 	return nil

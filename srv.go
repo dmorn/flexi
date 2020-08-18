@@ -137,6 +137,7 @@ func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
 	root := file.NewDirFiles("", files...)
 	srv.FS = memfs.New(root)
 
+	log.Printf("*** listening on %v", ln.Addr())
 	return srv.Serve()
 }
 

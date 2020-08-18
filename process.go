@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"strconv"
 
@@ -21,7 +22,7 @@ import (
 
 type Stdio struct {
 	// In contains the input bytes. For 9p processes,
-	// its the data written to the ctl file, which triggers
+	// its the data written to the in file, which triggers
 	// the execution of the process.
 	In io.Reader
 	// Write here execution errors.
@@ -60,7 +61,7 @@ func ServeProcess(ln net.Listener, r Processor) error {
 	err := file.NewMulti("err")
 	state := file.NewMulti("state")
 	retv := file.NewMulti("retv")
-	ctl := file.NewPlumber("ctl", func(p *file.Plumber) bool {
+	in := file.NewPlumber("in", func(p *file.Plumber) bool {
 		buf := new(bytes.Buffer)
 		if _, err := io.Copy(buf, p); err != nil {
 			return false
@@ -80,12 +81,13 @@ func ServeProcess(ln net.Listener, r Processor) error {
 		return true
 	})
 
-	root := file.NewDirFiles("", ctl, err, retv, state)
+	root := file.NewDirFiles("", in, err, retv, state)
 	p := Process{
 		FS:     memfs.New(root),
 		Ln:     ln,
 		Runner: r,
 	}
+	log.Printf("*** listening on %v", ln.Addr())
 	return p.Serve()
 }
 
