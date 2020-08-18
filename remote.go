@@ -131,7 +131,7 @@ func RestoreRemote(mtpt string, name string, s Spawner, rp *RemoteProcess) (*Rem
 	// to the past. If this wasn't a spawned remote,
 	// users should just delete this and create a new one.
 
-	mirror := file.NewDirLS("mirror", file.DiskLS(path))
+	mirror := file.NewDirLs("mirror", file.LsDisk(path))
 	return &Remote{
 		mtpt: mtpt,
 		S:    s,
@@ -147,7 +147,7 @@ func NewRemote(mtpt string, name string, s Spawner, id int) (*Remote, error) {
 	// restored instead, or might be. Anyway it **might**
 	// not be treated as an error in the future.
 	path := filepath.Join(mtpt, name)
-	if len(file.DiskLS(path)()) > 0 {
+	if len(file.LsDisk(path)()) > 0 {
 		return nil, fmt.Errorf("remote exists already at %v", path)
 	}
 	os.RemoveAll(path)
@@ -169,7 +169,7 @@ func NewRemote(mtpt string, name string, s Spawner, id int) (*Remote, error) {
 		return true
 	})
 	static := []fs.File{spawn, errfile, statefile}
-	mirror := file.NewDirLS("mirror", file.DiskLS(path))
+	mirror := file.NewDirLs("mirror", file.LsDisk(path))
 	r.Dir = file.NewDirFiles(name, append(static, mirror)...)
 	return r, nil
 }

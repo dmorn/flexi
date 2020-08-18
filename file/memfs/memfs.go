@@ -44,18 +44,18 @@ func open(path []string, files []fs.File) fs.File {
 		// the file we're looking for is under this one, hence
 		// we should search in the files contained in this
 		// directory.
-		type hasLS interface {
-			LS() []fs.File
+		type hasLs interface {
+			Ls() []fs.File
 		}
 
-		dir, ok := v.(hasLS)
+		dir, ok := v.(hasLs)
 		if !ok {
 			// We cannot do anything. The file is supposed to
 			// be under this directory, but this is not a
 			// directory.
 			return nil
 		}
-		return open(path[1:], dir.LS())
+		return open(path[1:], dir.Ls())
 	}
 	return nil
 }

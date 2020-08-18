@@ -69,7 +69,7 @@ func (s *Srv) RestoreRemote(rp *RemoteProcess) (*Remote, error) {
 }
 
 func (s *Srv) cleanupMtpt() error {
-	for i, v := range file.DiskLS(s.Mtpt)() {
+	for i, v := range file.LsDisk(s.Mtpt)() {
 		info, err := v.Stat()
 		if err != nil {
 			return fmt.Errorf("clean-up mtpt (%d): %v", i, err)
@@ -98,7 +98,7 @@ func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
 	// Now retrieve remote processes that are still
 	// running and try mounting them back.
 
-	oldremotes, err := s.LS()
+	oldremotes, err := s.Ls()
 	if err != nil {
 		return err
 	}

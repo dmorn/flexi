@@ -25,7 +25,7 @@ type Dir struct {
 	modTime time.Time
 }
 
-func (d *Dir) LS() []fs.File {
+func (d *Dir) Ls() []fs.File {
 	d.Lock()
 	defer d.Unlock()
 	return d.ls()
@@ -40,6 +40,7 @@ func (d *Dir) Close() error {
 	}
 	return nil
 }
+
 func (d *Dir) Open() (io.ReadWriteCloser, error) { return &dirReader{dir: d}, nil }
 func (d *Dir) Stat() (os.FileInfo, error) {
 	d.Lock()
@@ -98,10 +99,10 @@ func (d *Dir) Remove(f fs.File) {
 	}
 }
 
-// DiskLS returns an ls function that inspects path on disk. Basically
+// LsDisk returns an ls function that inspects path on disk. Basically
 // it works just like Unix's ls command, but returns a list of File.
 // It can be used to create Dir instances that act on the disk.
-func DiskLS(path string) func() []fs.File {
+func LsDisk(path string) func() []fs.File {
 	return func() []fs.File {
 		dir, err := os.Open(path)
 		if err != nil {
@@ -121,7 +122,7 @@ func DiskLS(path string) func() []fs.File {
 					name:    v.Name(),
 					perm:    v.Mode(),
 					modTime: v.ModTime(),
-					ls:      DiskLS(path),
+					ls:      LsDisk(path),
 				}
 				continue
 			}
@@ -131,7 +132,7 @@ func DiskLS(path string) func() []fs.File {
 	}
 }
 
-func NewDirLS(name string, ls func() []fs.File) *Dir {
+func NewDirLs(name string, ls func() []fs.File) *Dir {
 	return &Dir{
 		perm:    os.ModePerm,
 		name:    name,
@@ -141,7 +142,7 @@ func NewDirLS(name string, ls func() []fs.File) *Dir {
 }
 
 func NewDirFiles(name string, files ...fs.File) *Dir {
-	return NewDirLS(name, func() []fs.File {
+	return NewDirLs(name, func() []fs.File {
 		return files
 	})
 }

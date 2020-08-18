@@ -28,9 +28,9 @@ type Fargate struct {
 	// BackupDir is path pointing to the disk location where
 	// Fargate will store the information about the spawned
 	// tasks. In case of a recovery, files can be retriven
-	// using LS.
+	// using Ls.
 	BackupDir string
-	Backup bool
+	Backup    bool
 	sess      *session.Session
 	client    *ecs.ECS
 }
@@ -296,19 +296,19 @@ func (f *Fargate) Kill(ctx context.Context, r io.Reader) error {
 	return nil
 }
 
-func (f *Fargate) LS() ([]*flexi.RemoteProcess, error) {
-	files := file.DiskLS(f.BackupDir)()
+func (f *Fargate) Ls() ([]*flexi.RemoteProcess, error) {
+	files := file.LsDisk(f.BackupDir)()
 	rp := make([]*flexi.RemoteProcess, 0, len(files))
 	for i, v := range files {
 		rwc, err := v.Open()
 		if err != nil {
-			return nil, fmt.Errorf("LS file %d: open error: %w", i, err)
+			return nil, fmt.Errorf("Ls file %d: open error: %w", i, err)
 		}
 		defer rwc.Close()
 
 		var r flexi.RemoteProcess
 		if err := json.NewDecoder(rwc).Decode(&r); err != nil {
-			return nil, fmt.Errorf("LS file %d: %w", i, err)
+			return nil, fmt.Errorf("Ls file %d: %w", i, err)
 		}
 		rp = append(rp, &r)
 	}

@@ -32,5 +32,5 @@ func (rp *RemoteProcess) SpawnedReader() io.Reader {
 type Spawner interface {
 	Spawn(context.Context, io.Reader, int) (*RemoteProcess, error)
 	Kill(context.Context, io.Reader) error
-	LS() ([]*RemoteProcess, error)
+	Ls() ([]*RemoteProcess, error)
 }

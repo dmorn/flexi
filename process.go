@@ -59,8 +59,8 @@ func (p *Process) Serve() error {
 
 func ServeProcess(ln net.Listener, r Processor) error {
 	err := file.NewMulti("err")
-	state := file.NewMulti("state")
 	retv := file.NewMulti("retv")
+	state := file.NewMulti("state")
 	in := file.NewPlumber("in", func(p *file.Plumber) bool {
 		buf := new(bytes.Buffer)
 		if _, err := io.Copy(buf, p); err != nil {
@@ -80,8 +80,13 @@ func ServeProcess(ln net.Listener, r Processor) error {
 		}()
 		return true
 	})
-
-	root := file.NewDirFiles("", in, err, retv, state)
+	root := file.NewDirFiles(
+		"",
+		in,
+		err,
+		retv,
+		state,
+	)
 	p := Process{
 		FS:     memfs.New(root),
 		Ln:     ln,
