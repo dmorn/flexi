@@ -44,4 +44,4 @@ on another terminal:
 ```
 
 ### Notes about deploying to AWS
-- flexi needs to be hosted in an environment that allows it to "mount", hence **not** Fargate but rather ECS with priviledged flag enabled.
+- flexi needs to be hosted in an environment that allows it to "mount", hence **not** Fargate but rather ECS with priviledged flag enabled (hang on we're working on it. See [issue #10](https://github.com/jecoz/flexi/issues/10)
