@@ -11,17 +11,19 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 
 	"github.com/jecoz/flexi"
 	"github.com/jecoz/flexi/fargate"
+	"github.com/Harvey-OS/ninep/protocol"
 )
 
 func main() {
-	port := flag.String("port", "9pfs", "Server listening port")
-	mtpt := flag.String("m", "pmnt", "Remote processes mount point")
+	p := flag.Int("p", protocol.PORT, "Server listening port")
+	b := flag.String("b", os.Args[0]+".backup", "Backup directory path containing information about each imported remote process")
 	flag.Parse()
 
-	addr := net.JoinHostPort("", *port)
+	addr := net.JoinHostPort("", strconv.Itoa(*p))
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Printf("error * %v", err)

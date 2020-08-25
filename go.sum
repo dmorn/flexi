@@ -2,6 +2,8 @@ aqwari.net/net/styx v0.0.0-20200607052449-91faf1aa2e2d h1:mB2JGJPF0fzOA9Wf0ZLFE0
 aqwari.net/net/styx v0.0.0-20200607052449-91faf1aa2e2d/go.mod h1:kcgWZDVb63SSKKIBVLUnQRF4RB87fVss6sZ6HZkq69o=
 aqwari.net/retry v0.0.0-20180428204214-1281ce5d8df0 h1:BeD6U5TNwhMWxeydyi5xqpaNZx1MWl5QTcW4w7Mxf+Y=
 aqwari.net/retry v0.0.0-20180428204214-1281ce5d8df0/go.mod h1:XSNyyoM+OSg3vRmROPrS1lEpV7q/I9J1HAKMMxdUkU4=
+github.com/Harvey-OS/ninep v0.0.0-20200724082702-d30a6d4f9789 h1:CTx4Ie/zMSBhZ+pjiklxmqF+HxDlXMXRDiUCCo6J0RY=
+github.com/Harvey-OS/ninep v0.0.0-20200724082702-d30a6d4f9789/go.mod h1:YmLTajv/R+cjEsJ8/vfGOckeEBbz06tgHlYBSpbe+eo=
 github.com/aws/aws-sdk-go v1.33.1 h1:yz9XmNzPshz/lhfAZvLfMnIS9HPo8+boGRcWqDVX+T0=
 github.com/aws/aws-sdk-go v1.33.1/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
