@@ -116,17 +116,17 @@ func LsDisk(path string) func() []fs.File {
 		infos, _ := dir.Readdir(-1)
 		files := make([]fs.File, len(infos))
 		for i, v := range infos {
-			path := filepath.Join(path, v.Name())
+			child := filepath.Join(path, v.Name())
 			if v.IsDir() {
 				files[i] = &Dir{
 					name:    v.Name(),
 					perm:    v.Mode(),
 					modTime: v.ModTime(),
-					ls:      LsDisk(path),
+					ls:      LsDisk(child),
 				}
-				continue
+			} else {
+				files[i] = NewRegular(child, v)
 			}
-			files[i] = NewRegular(path, v)
 		}
 		return files
 	}
