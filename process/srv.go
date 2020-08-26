@@ -11,13 +11,13 @@ import (
 	"io"
 	"log"
 	"net"
-	"strconv"
 	"os"
+	"strconv"
 
-	"github.com/jecoz/flexi/fs"
-	"github.com/jecoz/flexi/fs/synthfs"
-	"github.com/jecoz/flexi/fs/styxfs"
 	"aqwari.net/net/styx"
+	"github.com/jecoz/flexi/fs"
+	"github.com/jecoz/flexi/fs/styxfs"
+	"github.com/jecoz/flexi/fs/synthfs"
 )
 
 type Stdio struct {
@@ -55,7 +55,7 @@ func (s *Srv) Serve(ln net.Listener) error {
 	srv := &styx.Server{
 		// Remember that it is possible to stack handlers
 		// using the styx.Stack helper.
-		Handler: s,
+		Handler:  s,
 		TraceLog: log.New(os.Stderr, "", log.Ltime),
 	}
 	return srv.Serve(ln)
