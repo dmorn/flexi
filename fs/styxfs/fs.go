@@ -1,26 +1,12 @@
 package styxfs
 
 import (
-	"errors"
-
 	"aqwari.net/net/styx"
 	"github.com/jecoz/flexi/fs"
 )
 
 type FS struct {
 	fs.RWFS
-}
-
-type TruncateFile interface {
-	fs.File
-	Truncate(int64) error
-}
-
-func Truncate(f fs.File, s int64) error {
-	if tf, ok := f.(TruncateFile); ok {
-		return tf.Truncate(s)
-	}
-	return errors.New("Truncate not available")
 }
 
 func (fys *FS) handleT(t styx.Request) {
@@ -51,7 +37,7 @@ func (fys *FS) handleT(t styx.Request) {
 			msg.Rtruncate(err)
 			return
 		}
-		msg.Rtruncate(Truncate(file, msg.Size))
+		msg.Rtruncate(fs.Truncate(file, msg.Size))
 	case styx.Tutimes:
 		// Each file can handle this information without
 		// requiring the user telling when the file has

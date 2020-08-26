@@ -48,6 +48,18 @@ func (i FileStat) ModTime() time.Time { return i.modTime }
 func (i FileStat) IsDir() bool        { return i.isDir }
 func (i FileStat) Sys() interface{}   { return nil }
 
+type TruncateFile interface {
+	File
+	Truncate(int64) error
+}
+
+func Truncate(f File, s int64) error {
+	if tf, ok := f.(TruncateFile); ok {
+		return tf.Truncate(s)
+	}
+	return errors.New("Truncate not available")
+}
+
 type IsDirFile interface {
 	File
 	IsDir() bool
