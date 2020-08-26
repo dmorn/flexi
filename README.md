@@ -10,6 +10,8 @@ SPDX-License-Identifier: BSD-3-Clause
 [![GoDoc](https://godoc.org/github.com/jecoz/flexi?status.svg)](https://godoc.org/github.com/jecoz/flexi)
 [![asciicast](https://asciinema.org/a/345847.svg)](https://asciinema.org/a/345847)
 
+### Warning: work in progress, do not use this library.
+
 ### docker session
 on one terminal:
 ```

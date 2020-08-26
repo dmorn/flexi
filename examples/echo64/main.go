@@ -15,7 +15,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/jecoz/flexi"
+	"github.com/jecoz/flexi/process"
 )
 
 func main() {
@@ -36,9 +36,8 @@ func main() {
 		log.Printf("%v <- signal received\n", s)
 		ln.Close()
 	}()
-
-	if err := flexi.ServeProcess(ln, flexi.ProcessorFunc(func(i *flexi.Stdio) {
-		h := flexi.NewProcessHelper(i, 3)
+	if err := process.Serve(ln, process.RunnerFunc(func(i *process.Stdio) {
+		h := process.NewHelper(i, 3)
 		defer h.Done()
 
 		h.Progress(1, "buffering input payload")
