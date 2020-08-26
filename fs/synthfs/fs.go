@@ -1,12 +1,12 @@
 package synthfs
 
 import (
+	"errors"
+	"fmt"
+	"os"
 	"path"
 	"sort"
 	"strings"
-	"fmt"
-	"os"
-	"errors"
 	"time"
 
 	"github.com/jecoz/flexi/fs"
@@ -33,13 +33,14 @@ type Opener interface {
 }
 
 type OpenerFunc func() (fs.File, error)
+
 func (o OpenerFunc) Open() (fs.File, error) { return o() }
 
 type onode struct {
 	Opener
-	Name string
+	Name   string
 	Parent *onode
-	Leafs []*onode
+	Leafs  []*onode
 }
 
 func (n *onode) traverse(p ...string) *onode {
@@ -74,8 +75,8 @@ func (n *onode) dirFileOpener() Opener {
 		}
 		d := &fs.DirFile{
 			ModTime: modTime,
-			Name: n.Name,
-			Files: fi,
+			Name:    n.Name,
+			Files:   fi,
 		}
 		return d, nil
 	})
@@ -97,7 +98,7 @@ func (fsys *FS) AddOpener(o Opener, n string, in ...string) error {
 	if pn = fsys.tree.traverse(in...); pn == nil {
 		return fmt.Errorf("traverse %v: %w", dirpath, fs.ErrNotExist)
 	}
-	
+
 	// The parent node needs to be a directory, otherwise we end up
 	// creating things that do not have sense.
 	f, err := pn.Open()
@@ -107,7 +108,7 @@ func (fsys *FS) AddOpener(o Opener, n string, in ...string) error {
 	if !fs.FileIsDir(f) {
 		return fmt.Errorf("cannot add %v to %v: not a directory", n, dirpath)
 	}
-	
+
 	// Before adding the leaf, check that a file named
 	// n is not already there.
 	if ln := pn.traverse(n); ln != nil {
@@ -118,7 +119,7 @@ func (fsys *FS) AddOpener(o Opener, n string, in ...string) error {
 	}
 	pn.Leafs = append(pn.Leafs, &onode{
 		Opener: o,
-		Name: n,
+		Name:   n,
 		// No need to initialize Leafs now, we can postpone till
 		// we actually want to add an opener to this onode too.
 		Parent: pn,

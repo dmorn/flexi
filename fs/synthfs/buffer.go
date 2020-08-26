@@ -2,8 +2,8 @@ package synthfs
 
 import (
 	"bytes"
-	"os"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/jecoz/flexi/fs"
@@ -30,17 +30,17 @@ type BufferFile struct {
 	r *bytes.Reader
 }
 
-func (f *BufferFile) Seek(o int64, w int) (int64, error) { return f.r.Seek(o, w) }
-func (f *BufferFile) Read(p []byte) (int, error) { return f.r.Read(p) }
+func (f *BufferFile) Seek(o int64, w int) (int64, error)    { return f.r.Seek(o, w) }
+func (f *BufferFile) Read(p []byte) (int, error)            { return f.r.Read(p) }
 func (f *BufferFile) ReadAt(b []byte, o int64) (int, error) { return f.r.ReadAt(b, o) }
 
 func (f *BufferFile) Stat() (os.FileInfo, error) {
 	return FileStat{
-		name: f.b.Name,
-		size: f.r.Size(),
-		mode: f.b.Mode,
+		name:    f.b.Name,
+		size:    f.r.Size(),
+		mode:    f.b.Mode,
 		modTime: f.b.modTime,
-		isDir: false,
+		isDir:   false,
 	}, nil
 }
 
@@ -66,10 +66,10 @@ func (f *BufferFile) Close() error {
 // zero value is ready to be used, buf the Name and Mode fields should be
 // filled before the first Open() call.
 type Buffer struct {
-	b bytes.Buffer
+	b       bytes.Buffer
 	modTime time.Time
-	Name string
-	Mode os.FileMode
+	Name    string
+	Mode    os.FileMode
 }
 
 func (b *Buffer) Open() (fs.File, error) {

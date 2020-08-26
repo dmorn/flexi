@@ -14,7 +14,7 @@ import (
 
 var (
 	ErrNotExist = os.ErrNotExist
-	ErrExist = os.ErrExist
+	ErrExist    = os.ErrExist
 )
 
 type File interface {
@@ -72,9 +72,9 @@ func FileIsDir(f File) bool {
 
 type DirFile struct {
 	ModTime time.Time
-	Files []os.FileInfo
-	Name string
-	off int
+	Files   []os.FileInfo
+	Name    string
+	off     int
 }
 
 func (d *DirFile) Read(p []byte) (int, error) {
@@ -83,11 +83,11 @@ func (d *DirFile) Read(p []byte) (int, error) {
 
 func (d *DirFile) Stat() (os.FileInfo, error) {
 	return FileStat{
-		name: d.Name,
-		size: 0,
-		mode: os.ModeDir,
+		name:    d.Name,
+		size:    0,
+		mode:    os.ModeDir,
 		modTime: d.ModTime,
-		isDir: true,
+		isDir:   true,
 	}, nil
 }
 
