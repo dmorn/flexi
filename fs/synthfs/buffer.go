@@ -90,12 +90,6 @@ func (f *BufferFile) Write(p []byte) (n int, err error) {
 		return
 	}
 	off := f.Offset()
-	if off > 0 && int(off) < len(f.b.b.Bytes()) {
-		// The user wants its bytes to be written *after* off, which
-		// is not reflected in f.b (it is always at the 0 position, we
-		// never read straight from it, hence we never increase its offset).
-		f.b.b.Truncate(int(off))
-	}
 	if n, err = f.b.b.Write(p); err != nil {
 		return
 	}

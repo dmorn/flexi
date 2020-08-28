@@ -138,8 +138,7 @@ type bufferCallback func(*synthfs.Buffer) bool
 type hackBufferFile struct {
 	*synthfs.BufferFile
 
-	b       *synthfs.Buffer
-	plumbed bool
+	hb      *hackBuffer
 	onClose bufferCallback
 }
 
@@ -150,15 +149,15 @@ func (f *hackBufferFile) Close() error {
 	if err := f.BufferFile.Close(); err != nil {
 		return err
 	}
-	if f.onClose != nil && !f.plumbed {
-		// N.B. onClose might block.
-		f.plumbed = f.onClose(f.b)
+	if f.onClose != nil && !f.hb.plumbed {
+		_ = f.onClose(f.hb.Buffer)
 	}
 	return nil
 }
 
 type hackBuffer struct {
 	*synthfs.Buffer
+	plumbed bool
 	onClose bufferCallback
 }
 
@@ -174,17 +173,21 @@ func (b *hackBuffer) Open() (fs.File, error) {
 
 	return &hackBufferFile{
 		BufferFile: bf,
-		b:          b.Buffer,
+		hb:         b,
 		onClose:    b.onClose,
 	}, nil
 }
 
 func newHackBuffer(n string, m os.FileMode, onClose bufferCallback) *hackBuffer {
-	return &hackBuffer{
+	hb := &hackBuffer{
 		Buffer: &synthfs.Buffer{
 			Name: n,
 			Mode: m,
 		},
-		onClose: onClose,
 	}
+	hb.onClose = func(b *synthfs.Buffer) bool {
+		hb.plumbed = onClose(b)
+		return hb.plumbed
+	}
+	return hb
 }
