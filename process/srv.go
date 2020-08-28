@@ -5,14 +5,12 @@
 package process
 
 import (
-	"encoding/csv"
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
-	"strconv"
 
 	"aqwari.net/net/styx"
 	"github.com/jecoz/flexi/fs"
@@ -63,89 +61,131 @@ func (s *Srv) Serve(ln net.Listener) error {
 
 func NewSrv(fsys fs.RWFS) *Srv { return &Srv{styxfs.New(fsys)} }
 
-func addBuffer(fsys *synthfs.FS, n string, m os.FileMode, in ...string) *synthfs.Buffer {
+func insertBuffer(fsys *synthfs.FS, n string, m os.FileMode, in ...string) *synthfs.Buffer {
 	b := &synthfs.Buffer{
 		Name: n,
 		Mode: m,
 	}
-	if err := fsys.AddOpener(b, n, in...); err != nil {
+	if err := fsys.InsertOpener(b, n, in...); err != nil {
 		panic(err)
 	}
 	return b
 }
 
+func panicOpenWriteCloser(of func() (fs.File, error)) io.WriteCloser {
+	f, err := of()
+	if err != nil {
+		panic(err)
+	}
+	bf, ok := f.(*synthfs.BufferFile)
+	if !ok {
+		panic(fmt.Errorf("of() did not return a synthfs.BufferFile"))
+	}
+	return bf
+}
+
 func Serve(ln net.Listener, r Runner) error {
 	fsys := new(synthfs.FS)
-	addBuffer(fsys, "hello", os.ModePerm)
+	state := insertBuffer(fsys, "state", 0440)
+	retv := insertBuffer(fsys, "retv", 0440)
+	errf := insertBuffer(fsys, "err", 0440)
+
+	in := newHackBuffer("in", 0220, func(b *synthfs.Buffer) {
+		// TODO: if buffer contains some content, create the Stdin
+		// struct and start the runner. Remember that this function
+		// prevents the hackBufferFile to Close.
+		// TODO: decide how to react to errors.
+		bf, err := b.Open()
+		if err != nil {
+			panic(err)
+		}
+		defer bf.Close()
+
+		var bb bytes.Buffer
+		n, err := io.Copy(&bb, bf)
+		if err != nil {
+			panic(err)
+		}
+		if n == 0 {
+			// Runner expects the input to contain a payload
+			// describing what should be done.
+			// TODO: warn/info log?
+			return
+		}
+		go func() {
+			ewc := panicOpenWriteCloser(errf.Open)
+			swc := panicOpenWriteCloser(state.Open)
+			rwc := panicOpenWriteCloser(retv.Open)
+			r.Run(&Stdio{
+				In:    &bb,
+				Err:   ewc,
+				State: swc,
+				Retv:  rwc,
+			})
+			ewc.Close()
+			swc.Close()
+			rwc.Close()
+		}()
+	})
+	if err := fsys.InsertOpener(in, "in"); err != nil {
+		panic(err)
+	}
 
 	log.Printf("*** listening on %v", ln.Addr())
 	return NewSrv(fsys).Serve(ln)
 }
 
-// Use NewHelper to create a working instance of Helper.
-type Helper struct {
-	tot float64
-	i   *Stdio
-	pw  *csv.Writer
+type bufferCallback func(*synthfs.Buffer)
+
+type hackBufferFile struct {
+	*synthfs.BufferFile
+
+	b       *synthfs.Buffer
+	onClose bufferCallback
 }
 
-func (h *Helper) relayErr(err error) {
-	// TODO: panic-ing here is just a tmp solution.
-	// I would rather prefer to contact a human.
-	// Log? Email? Slack?
-	panic(err)
-}
-
-func (h *Helper) Progress(step int, format string, args ...interface{}) {
-	if err := h.pw.Write([]string{
-		strconv.FormatFloat(float64(step)/h.tot, 'f', -1, 64),
-		fmt.Sprintf(format, args...),
-	}); err != nil {
-		h.relayErr(err)
-		return
+func (f *hackBufferFile) Close() error {
+	// When a BufferFile is closed, it syncs its updated contents
+	// with the Buffer itself. First we close the BufferFile and,
+	// if no error occurs, we call the onClose callback if present.
+	if err := f.BufferFile.Close(); err != nil {
+		return err
 	}
-	h.pw.Flush()
-	if err := h.pw.Error(); err != nil {
-		h.relayErr(err)
+	if f.onClose != nil {
+		// N.B. onClose might block.
+		f.onClose(f.b)
 	}
+	return nil
 }
 
-func (h *Helper) Err(err error) {
-	// TODO: if we write multiple times to h.Err we'll produce
-	// and invalid json payload. We should be able to truncate
-	// the file instead.
-	if werr := json.NewEncoder(h.i.Err).Encode(&struct {
-		Error string `json:"error"`
-	}{
-		Error: err.Error(),
-	}); werr != nil {
-		h.relayErr(fmt.Errorf("%v: %w", werr, err))
+type hackBuffer struct {
+	*synthfs.Buffer
+	onClose bufferCallback
+}
+
+func (b *hackBuffer) Open() (fs.File, error) {
+	f, err := b.Buffer.Open()
+	if err != nil {
+		return nil, err
 	}
-}
-
-func (h *Helper) Errf(format string, args ...interface{}) {
-	h.Err(fmt.Errorf(format, args...))
-}
-
-func (h *Helper) Retv(v interface{}) {
-	if err := json.NewEncoder(h.i.Retv).Encode(v); err != nil {
-		// Try telling the user about the error!
-		h.Err(err)
+	bf, ok := f.(*synthfs.BufferFile)
+	if !ok {
+		return nil, fmt.Errorf("Open() did not return a synthfs.BufferFile")
 	}
+
+	return &hackBufferFile{
+		BufferFile: bf,
+		b:          b.Buffer,
+		onClose:    b.onClose,
+	}, nil
 }
 
-func (h *Helper) JSONDecodeInput(v interface{}) error {
-	return json.NewDecoder(h.i.In).Decode(v)
-}
-
-// Done writes the final "Done" message, indicating that the process
-// finished doing its task and will not post any more status update.
-func (h *Helper) Done() { h.Progress(int(h.tot), "done!") }
-
-func NewHelper(i *Stdio, tot int) *Helper {
-	return &Helper{
-		tot: float64(tot),
-		i:   i,
-		pw:  csv.NewWriter(i.State),
+func newHackBuffer(n string, m os.FileMode, onClose bufferCallback) *hackBuffer {
+	return &hackBuffer{
+		Buffer: &synthfs.Buffer{
+			Name: n,
+			Mode: m,
+		},
+		onClose: onClose,
 	}
 }
