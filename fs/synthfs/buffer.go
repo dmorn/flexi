@@ -2,7 +2,8 @@ package synthfs
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -26,39 +27,83 @@ func (i FileStat) IsDir() bool        { return i.isDir }
 func (i FileStat) Sys() interface{}   { return nil }
 
 type BufferFile struct {
-	b *Buffer
-	r *bytes.Reader
+	uAt time.Time
+	b   *Buffer
+	r   *bytes.Reader
 }
 
-func (f *BufferFile) Seek(o int64, w int) (int64, error)    { return f.r.Seek(o, w) }
-func (f *BufferFile) Read(p []byte) (int, error)            { return f.r.Read(p) }
-func (f *BufferFile) ReadAt(b []byte, o int64) (int, error) { return f.r.ReadAt(b, o) }
+func (f *BufferFile) Seek(o int64, w int) (int64, error) { return f.sync(o, w) }
+func (f *BufferFile) Read(p []byte) (int, error) {
+	// Each time we perform Truncate, Read or Write operations
+	// on f.b.b we need to update the underlying datasource of
+	// this bytes.Reader, as it may be reading from a slice that
+	// as changed.
+	if f.uAt.After(f.b.uAt) {
+		if _, err := f.sync(f.Offset(), io.SeekStart); err != nil {
+			return 0, err
+		}
+	}
+	return f.r.Read(p)
+}
+func (f *BufferFile) ReadAt(b []byte, o int64) (int, error) {
+	if f.uAt.After(f.b.uAt) {
+		if _, err := f.sync(0, io.SeekStart); err != nil {
+			return 0, err
+		}
+	}
+	return f.r.ReadAt(b, o)
+}
 
 func (f *BufferFile) Stat() (os.FileInfo, error) {
 	return FileStat{
 		name:    f.b.Name,
 		size:    f.r.Size(),
 		mode:    f.b.Mode,
-		modTime: f.b.modTime,
+		modTime: f.uAt,
 		isDir:   false,
 	}, nil
 }
 
-// Note: Truncate and Write are to be implemented together to support
-// RW files.
-
-func (f *BufferFile) Truncate(n int64) error {
-	return errors.New("file buffer: truncate not supported")
+func (f *BufferFile) Offset() int64 {
+	return f.r.Size() - int64(f.r.Len())
 }
 
-func (f *BufferFile) Write(p []byte) (int, error) {
-	return 0, errors.New("file buffer: write not supported")
+func (f *BufferFile) sync(off int64, w int) (abs int64, err error) {
+	f.r.Reset(f.b.b.Bytes())
+	if abs, err = f.r.Seek(off, w); err != nil {
+		return
+	}
+	f.uAt = time.Now()
+	f.b.uAt = f.uAt
+	return
+}
+
+func (f *BufferFile) Truncate(size int64) (err error) {
+	f.b.b.Truncate(int(size))
+	_, err = f.sync(size, io.SeekStart)
+	return
+}
+
+func (f *BufferFile) Write(p []byte) (n int, err error) {
+	if f.b.uAt.After(f.uAt) {
+		err = fmt.Errorf("buffer contents changed since last read")
+		return
+	}
+	off := f.Offset()
+	if off > 0 && int(off) < len(f.b.b.Bytes()) {
+		// The user wants its bytes to be written *after* off, which
+		// is not reflected in f.b (it is always at the 0 position, we
+		// never read straight from it, hence we never increase its offset).
+		f.b.b.Truncate(int(off))
+	}
+	if n, err = f.b.b.Write(p); err != nil {
+		return
+	}
+	_, err = f.sync(off, io.SeekStart)
+	return
 }
 
 func (f *BufferFile) Close() error {
-	// TODO: once write/truncate are implemented, this is the moment
-	// were we *could* sync the updated filebuffer with the buffer,
-	// if any change took place.
 	return nil
 }
 
@@ -66,18 +111,22 @@ func (f *BufferFile) Close() error {
 // zero value is ready to be used, buf the Name and Mode fields should be
 // filled before the first Open() call.
 type Buffer struct {
-	b       bytes.Buffer
-	modTime time.Time
-	Name    string
-	Mode    os.FileMode
+	b    bytes.Buffer
+	uAt  time.Time
+	Name string
+	Mode os.FileMode
 }
 
+// Open returns an fs.File implementation that interacts with the underlying
+// buffer. The file returned implements io.Write and Truncate too and can
+// be used to edit b's contents.
 func (b *Buffer) Open() (fs.File, error) {
-	if b.modTime.IsZero() {
-		b.modTime = time.Now()
+	if b.uAt.IsZero() {
+		b.uAt = time.Now()
 	}
 	return &BufferFile{
-		r: bytes.NewReader(b.b.Bytes()),
-		b: b,
+		r:   bytes.NewReader(b.b.Bytes()),
+		b:   b,
+		uAt: b.uAt,
 	}, nil
 }

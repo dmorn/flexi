@@ -90,7 +90,7 @@ func Serve(ln net.Listener, r Runner) error {
 	retv := insertBuffer(fsys, "retv", 0440)
 	errf := insertBuffer(fsys, "err", 0440)
 
-	in := newHackBuffer("in", 0220, func(b *synthfs.Buffer) {
+	in := newHackBuffer("in", 0220, func(b *synthfs.Buffer) bool {
 		// TODO: if buffer contains some content, create the Stdin
 		// struct and start the runner. Remember that this function
 		// prevents the hackBufferFile to Close.
@@ -107,10 +107,7 @@ func Serve(ln net.Listener, r Runner) error {
 			panic(err)
 		}
 		if n == 0 {
-			// Runner expects the input to contain a payload
-			// describing what should be done.
-			// TODO: warn/info log?
-			return
+			return false
 		}
 		go func() {
 			ewc := panicOpenWriteCloser(errf.Open)
@@ -126,6 +123,7 @@ func Serve(ln net.Listener, r Runner) error {
 			swc.Close()
 			rwc.Close()
 		}()
+		return true
 	})
 	if err := fsys.InsertOpener(in, "in"); err != nil {
 		panic(err)
@@ -135,12 +133,13 @@ func Serve(ln net.Listener, r Runner) error {
 	return NewSrv(fsys).Serve(ln)
 }
 
-type bufferCallback func(*synthfs.Buffer)
+type bufferCallback func(*synthfs.Buffer) bool
 
 type hackBufferFile struct {
 	*synthfs.BufferFile
 
 	b       *synthfs.Buffer
+	plumbed bool
 	onClose bufferCallback
 }
 
@@ -151,9 +150,9 @@ func (f *hackBufferFile) Close() error {
 	if err := f.BufferFile.Close(); err != nil {
 		return err
 	}
-	if f.onClose != nil {
+	if f.onClose != nil && !f.plumbed {
 		// N.B. onClose might block.
-		f.onClose(f.b)
+		f.plumbed = f.onClose(f.b)
 	}
 	return nil
 }
