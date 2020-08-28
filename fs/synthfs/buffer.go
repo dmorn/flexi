@@ -81,9 +81,3 @@ func (b *Buffer) Open() (fs.File, error) {
 		b: b,
 	}, nil
 }
-
-func (b *Buffer) Write(p []byte) (int, error) { return b.b.Write(p) }
-func (b *Buffer) Truncate(n int64) error {
-	b.b.Truncate(int(n))
-	return nil
-}

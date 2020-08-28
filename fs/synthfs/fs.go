@@ -86,7 +86,7 @@ type FS struct {
 	tree *onode
 }
 
-func (fsys *FS) AddOpener(o Opener, n string, in ...string) error {
+func (fsys *FS) InsertOpener(o Opener, n string, in ...string) error {
 	if fsys.tree == nil {
 		// TODO: what about the opener? It should be a directory.
 		root := new(onode)
