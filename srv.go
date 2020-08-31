@@ -11,26 +11,18 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
-	"sync"
 
-	"github.com/jecoz/flexi/file"
-	"github.com/jecoz/flexi/file/memfs"
-	"github.com/jecoz/flexi/fs"
-	"github.com/jecoz/flexi/styx"
+	"aqwari.net/net/styx"
+
 )
 
 type Srv struct {
-	Mtpt string
-	Ln   net.Listener
 	S    Spawner
-	FS   fs.FS
-
 	pool *idPool
 }
 
-func (s *Srv) Serve() error {
+func (s *Srv) Serve(ln net.Listern) error {
 	return styx.Serve(s.Ln, s.FS)
 }
 
@@ -68,50 +60,25 @@ func (s *Srv) RestoreRemote(rp *RemoteProcess) (*Remote, error) {
 	})
 }
 
-func (s *Srv) cleanupMtpt() error {
-	for i, v := range file.LsDisk(s.Mtpt)() {
-		info, err := v.Stat()
-		if err != nil {
-			return fmt.Errorf("clean-up mtpt (%d): %v", i, err)
-		}
-		path := filepath.Join(s.Mtpt, info.Name())
-
-		// We do not care if the operation is not successfull.
-		// It might also be that there is nothing to umount.
-		umount(path)
-		if err = os.RemoveAll(path); err != nil {
-			return fmt.Errorf("clean-up mtpt (%d): %v", i, err)
-		}
-	}
-	return nil
-}
-
-func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
-	srv := &Srv{Mtpt: mtpt, Ln: ln, S: s, pool: new(idPool)}
-
-	// Start from a clean state, otherwise we could encounter
-	// issues later on.
-	if err := srv.cleanupMtpt(); err != nil {
-		return err
-	}
+func Serve(ln net.Listener, s Spawner) error {
+	srv := &Srv{S: s, pool: new(idPool)}
 
 	// Now retrieve remote processes that are still
 	// running and try mounting them back.
 
-	oldremotes, err := s.Ls()
+	remotes, err := s.Ls()
 	if err != nil {
 		return err
 	}
-	remotes := make([]*Remote, 0, len(oldremotes))
-	for i, v := range oldremotes {
-		restored, err := srv.RestoreRemote(v)
-		if err != nil {
+	restored := 0
+	for i, v := range remotes {
+		if err = srv.Restore(v); err != nil {
 			log.Printf("error * restore failed (%d): %v", i, err)
 			continue
 		}
-		remotes = append(remotes, restored)
+		restored++
 	}
-	log.Printf("*** %d remotes restored from %v", len(remotes), mtpt)
+	log.Printf("*** %d remotes restored", restored)
 
 	clone := file.WithRead("clone", func(p []byte) (int, error) {
 		// Users read the clone file to obtain
@@ -141,80 +108,3 @@ func ServeFlexi(ln net.Listener, mtpt string, s Spawner) error {
 	return srv.Serve()
 }
 
-type idPool struct {
-	sync.Mutex
-	free []int
-	out  []int
-}
-
-// Get returns a unique integer. Subsequent Get calls will not
-// return the same integer unless it is returned to the pool
-// with Put.
-func (p *idPool) Get() int {
-	p.Lock()
-	defer p.Unlock()
-	if p.out == nil {
-		p.out = []int{}
-	}
-	if len(p.free) == 0 {
-		max := 0
-		if len(p.out) > 0 {
-			max = p.out[0]
-			max++
-		}
-		p.free = []int{max}
-	}
-
-	id := p.free[0]
-	p.free = p.free[1:]
-	p.out = append(p.out, id)
-	sort.Sort(sort.Reverse(sort.IntSlice(p.out)))
-	return id
-}
-
-// Put returns i to the pool, meaning that subsequent Get
-// calls might return it.
-func (p *idPool) Put(i int) {
-	p.Lock()
-	defer p.Unlock()
-
-	remove := -1
-	for j, v := range p.out {
-		if v == i {
-			remove = j
-			break
-		}
-	}
-	if remove == -1 {
-		// Caller asked to remove an indentifier
-		// that was not in the out list.
-		// Is it critical?
-		return
-	}
-	p.out = append(p.out[:remove], p.out[remove+1:]...)
-
-	if p.free == nil {
-		p.free = []int{}
-	}
-	p.free = append(p.free, i)
-	sort.Ints(p.free)
-}
-
-// Have works like Get without returning any integer.
-// Use it to let p know you have i, and no other should.
-// Returns an error if p knew already that i was out.
-func (p *idPool) Have(i int) error {
-	p.Lock()
-	defer p.Unlock()
-	if p.out == nil {
-		p.out = []int{}
-	}
-	for _, v := range p.out {
-		if i == v {
-			return fmt.Errorf("%d is already tracked by the pool", i)
-		}
-	}
-	p.out = append(p.out, i)
-	sort.Sort(sort.Reverse(sort.IntSlice(p.out)))
-	return nil
-}
