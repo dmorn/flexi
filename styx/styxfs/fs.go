@@ -9,7 +9,7 @@ type FS struct {
 	fs.RWFS
 }
 
-func (fys *FS) handleT(t styx.Request) {
+func (fys *FS) HandleT(t styx.Request) {
 	switch msg := t.(type) {
 	case styx.Topen:
 		msg.Ropen(fys.Open(t.Path()))
