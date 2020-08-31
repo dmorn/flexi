@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 package process
-
 import (
 	"bytes"
 	"fmt"
@@ -14,7 +13,7 @@ import (
 
 	"aqwari.net/net/styx"
 	"github.com/jecoz/flexi/fs"
-	"github.com/jecoz/flexi/fs/styxfs"
+	"github.com/jecoz/flexi/styx/styxfs"
 	"github.com/jecoz/flexi/fs/synthfs"
 )
 
