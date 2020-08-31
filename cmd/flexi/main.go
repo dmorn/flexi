@@ -10,15 +10,14 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"path/filepath"
 
 	"github.com/jecoz/flexi"
 	"github.com/jecoz/flexi/fargate"
 )
 
 func main() {
-	port := flag.String("port", "9pfs", "Server listening port")
-	mtpt := flag.String("m", "pmnt", "Remote processes mount point")
+	port := flag.String("p", "9pfs", "Server listening port")
+	bkup := flag.String("b", os.Args[0]+".bkup", "Process backup path. Used for recoverying itermediate states")
 	flag.Parse()
 
 	addr := net.JoinHostPort("", *port)
@@ -36,10 +35,8 @@ func main() {
 		ln.Close()
 	}()
 
-	n := filepath.Join(*mtpt, "n")
-	b := filepath.Join(*mtpt, "backup")
-	s := &fargate.Fargate{BackupDir: b, Backup: true}
-	if err := flexi.ServeFlexi(ln, n, s); err != nil {
+	s := &fargate.Fargate{BackupDir: *bkup, Backup: true}
+	if err := flexi.Serve(ln, s); err != nil {
 		log.Printf("flexi server error * %v", err)
 	}
 }
