@@ -16,11 +16,11 @@ import (
 )
 
 func main() {
-	port := flag.String("p", "9pfs", "Server listening port")
-	bkup := flag.String("b", os.Args[0]+".bkup", "Process backup path. Used for recoverying itermediate states")
+	p := flag.String("p", "9pfs", "Server listening port")
+	b := flag.String("b", os.Args[0]+".bkup", "Process backup path. Used for recoverying itermediate states")
 	flag.Parse()
 
-	addr := net.JoinHostPort("", *port)
+	addr := net.JoinHostPort("", *p)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Printf("error * %v", err)
@@ -35,7 +35,7 @@ func main() {
 		ln.Close()
 	}()
 
-	s := &fargate.Fargate{BackupDir: *bkup, Backup: true}
+	s := &fargate.Fargate{BackupDir: *b, Backup: true}
 	if err := flexi.Serve(ln, s); err != nil {
 		log.Printf("flexi server error * %v", err)
 	}
