@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 package process
+
 import (
 	"bytes"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 	"aqwari.net/net/styx"
 	"github.com/jecoz/flexi/fs"
 	"github.com/jecoz/flexi/styx/styxfs"
-	"github.com/jecoz/flexi/fs/synthfs"
+	"github.com/jecoz/flexi/synth"
 )
 
 type Stdio struct {
@@ -60,12 +61,12 @@ func (s *Srv) Serve(ln net.Listener) error {
 
 func NewSrv(fsys fs.RWFS) *Srv { return &Srv{styxfs.New(fsys)} }
 
-func insertBuffer(fsys *synthfs.FS, n string, m os.FileMode, in ...string) *synthfs.Buffer {
-	b := &synthfs.Buffer{
+func insertBuffer(fsys *synth.FS, n string, m os.FileMode, in ...string) *synth.Buffer {
+	b := &synth.Buffer{
 		Name: n,
 		Mode: m,
 	}
-	if err := fsys.InsertOpener(b, n, in...); err != nil {
+	if err := fsys.InsertOpener(b, in...); err != nil {
 		panic(err)
 	}
 	return b
@@ -76,38 +77,40 @@ func panicOpenWriteCloser(of func() (fs.File, error)) io.WriteCloser {
 	if err != nil {
 		panic(err)
 	}
-	bf, ok := f.(*synthfs.BufferFile)
+	bf, ok := f.(*synth.BufferFile)
 	if !ok {
-		panic(fmt.Errorf("of() did not return a synthfs.BufferFile"))
+		panic(fmt.Errorf("of() did not return a synth.BufferFile"))
 	}
 	return bf
 }
 
 func Serve(ln net.Listener, r Runner) error {
-	fsys := new(synthfs.FS)
+	fsys := new(synth.FS)
 	state := insertBuffer(fsys, "state", 0440)
 	retv := insertBuffer(fsys, "retv", 0440)
 	errf := insertBuffer(fsys, "err", 0440)
 
-	in := newHackBuffer("in", 0220, func(b *synthfs.Buffer) bool {
-		// TODO: if buffer contains some content, create the Stdin
-		// struct and start the runner. Remember that this function
-		// prevents the hackBufferFile to Close.
-		// TODO: decide how to react to errors.
-		bf, err := b.Open()
+	inb := &synth.Buffer{Name: "in", Mode: 0220}
+	plumbed := false
+	in := synth.HackClose(inb, func() error {
+		if plumbed {
+			return nil
+		}
+		bf, err := inb.Open()
 		if err != nil {
-			panic(err)
+			return err
 		}
 		defer bf.Close()
 
 		var bb bytes.Buffer
 		n, err := io.Copy(&bb, bf)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		if n == 0 {
-			return false
+			return nil
 		}
+		plumbed = true
 		go func() {
 			ewc := panicOpenWriteCloser(errf.Open)
 			swc := panicOpenWriteCloser(state.Open)
@@ -122,71 +125,12 @@ func Serve(ln net.Listener, r Runner) error {
 			swc.Close()
 			rwc.Close()
 		}()
-		return true
+		return nil
 	})
-	if err := fsys.InsertOpener(in, "in"); err != nil {
+	if err := fsys.InsertOpener(in); err != nil {
 		panic(err)
 	}
 
 	log.Printf("*** listening on %v", ln.Addr())
 	return NewSrv(fsys).Serve(ln)
-}
-
-type bufferCallback func(*synthfs.Buffer) bool
-
-type hackBufferFile struct {
-	*synthfs.BufferFile
-
-	hb      *hackBuffer
-	onClose bufferCallback
-}
-
-func (f *hackBufferFile) Close() error {
-	// When a BufferFile is closed, it syncs its updated contents
-	// with the Buffer itself. First we close the BufferFile and,
-	// if no error occurs, we call the onClose callback if present.
-	if err := f.BufferFile.Close(); err != nil {
-		return err
-	}
-	if f.onClose != nil && !f.hb.plumbed {
-		_ = f.onClose(f.hb.Buffer)
-	}
-	return nil
-}
-
-type hackBuffer struct {
-	*synthfs.Buffer
-	plumbed bool
-	onClose bufferCallback
-}
-
-func (b *hackBuffer) Open() (fs.File, error) {
-	f, err := b.Buffer.Open()
-	if err != nil {
-		return nil, err
-	}
-	bf, ok := f.(*synthfs.BufferFile)
-	if !ok {
-		return nil, fmt.Errorf("Open() did not return a synthfs.BufferFile")
-	}
-
-	return &hackBufferFile{
-		BufferFile: bf,
-		hb:         b,
-		onClose:    b.onClose,
-	}, nil
-}
-
-func newHackBuffer(n string, m os.FileMode, onClose bufferCallback) *hackBuffer {
-	hb := &hackBuffer{
-		Buffer: &synthfs.Buffer{
-			Name: n,
-			Mode: m,
-		},
-	}
-	hb.onClose = func(b *synthfs.Buffer) bool {
-		hb.plumbed = onClose(b)
-		return hb.plumbed
-	}
-	return hb
 }
