@@ -2,8 +2,8 @@ package styxmux
 
 import (
 	"aqwari.net/net/styx"
-	"sync"
 	"regexp"
+	"sync"
 )
 
 type TMatcher interface {
@@ -15,6 +15,7 @@ type THandler interface {
 }
 
 type THandlerFunc func(styx.Request)
+
 func (f THandlerFunc) HandleT(t styx.Request) { f(t) }
 
 type TMatchHandler interface {
@@ -73,4 +74,3 @@ func New(h ...TMatchHandler) *Mux {
 	m.AppendHandlers(h...)
 	return m
 }
-

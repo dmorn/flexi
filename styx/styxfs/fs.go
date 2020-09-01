@@ -51,7 +51,7 @@ func (fys *FS) HandleT(t styx.Request) {
 
 func (fys *FS) Serve9P(s *styx.Session) {
 	for s.Next() {
-		fys.handleT(s.Request())
+		fys.HandleT(s.Request())
 	}
 }
 
