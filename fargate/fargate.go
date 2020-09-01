@@ -19,7 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/jecoz/flexi"
-	"github.com/jecoz/flexi/file"
 )
 
 const LastStatusPollInterval = time.Millisecond * time.Duration(500)
@@ -297,10 +296,23 @@ func (f *Fargate) Kill(ctx context.Context, r io.Reader) error {
 }
 
 func (f *Fargate) Ls() ([]*flexi.RemoteProcess, error) {
-	files := file.LsDisk(f.BackupDir)()
-	rp := make([]*flexi.RemoteProcess, 0, len(files))
-	for i, v := range files {
-		rwc, err := v.Open()
+	if err := os.MkdirAll(f.BackupDir, os.ModePerm); err != nil {
+		return nil, err
+	}
+	dir, err := os.Open(f.BackupDir)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
+	stats, err := dir.Readdir(-1)
+	if err != nil {
+		return nil, err
+	}
+
+	rp := make([]*flexi.RemoteProcess, 0, len(stats))
+	for i, v := range stats {
+		path := filepath.Join(f.BackupDir, v.Name())
+		rwc, err := os.Open(path)
 		if err != nil {
 			return nil, fmt.Errorf("Ls file %d: open error: %w", i, err)
 		}
