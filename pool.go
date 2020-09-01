@@ -5,9 +5,9 @@
 package flexi
 
 import (
-	"sync"
-	"sort"
 	"fmt"
+	"sort"
+	"sync"
 )
 
 type idPool struct {
