@@ -1,4 +1,4 @@
-package synthfs
+package synth
 
 import (
 	"bytes"

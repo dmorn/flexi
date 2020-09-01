@@ -1,4 +1,4 @@
-package synthfs
+package synth
 
 import (
 	"errors"
@@ -86,9 +86,20 @@ type FS struct {
 	tree *onode
 }
 
-func (fsys *FS) InsertOpener(o Opener, n string, in ...string) error {
+func (fsys *FS) InsertOpener(o Opener, in ...string) error {
+	f, err := o.Open()
+	if err != nil {
+		return err
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return err
+	}
+	n := stat.Name()
+	f.Close()
+
 	if fsys.tree == nil {
-		// TODO: what about the opener? It should be a directory.
 		root := new(onode)
 		root.Opener = root.dirFileOpener()
 		fsys.tree = root
@@ -101,7 +112,7 @@ func (fsys *FS) InsertOpener(o Opener, n string, in ...string) error {
 
 	// The parent node needs to be a directory, otherwise we end up
 	// creating things that do not have sense.
-	f, err := pn.Open()
+	f, err = pn.Open()
 	if err != nil {
 		return fmt.Errorf("open parent: %w", err)
 	}
